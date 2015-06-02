@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin">
+<Description>
+TODO : change
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+by $$$Macro</Description>
+<IncludeCode>%IKPublic</IncludeCode>
+<Super>%Persistent</Super>
+<TimeCreated>62875,33985.505811</TimeCreated>
+
+<Property name="PluginId">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="Order">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="Name">
+<Type>%String</Type>
+</Property>
+
+<Property name="ShortDescription">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Property name="LongDescription">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Property name="InputLabel">
+<Type>%String</Type>
+</Property>
+
+<Property name="SetLabel">
+<Type>%String</Type>
+</Property>
+
+<Property name="InputSize">
+<Description>
+numeric or AREA</Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="iKnowDomain">
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="InputSet">
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="InputPattern">
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="Metafield">
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="TermType">
+<Description>
+ENTITY, CRC, PATH, SENTENCE, STRING</Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="InputPlaceholder">
+<Type>%String</Type>
+</Property>
+
+<Property name="ClassName">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="500"/>
+</Property>
+
+<Property name="Enabled">
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="DisableManualSelection">
+<Description>
+whether the user needs to select elements in the initial list
+if true, there will be no execute or select box</Description>
+<Type>%Boolean</Type>
+</Property>
+
+<Index name="IdxName">
+<Properties>Name</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Index name="IdxPlugin">
+<IdKey>1</IdKey>
+<Properties>PluginId</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>1000</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>1000</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>PluginName</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default>Short description for display</Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+<Default>Long decsription for more help</Default>
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Concept</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Set</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>50</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>Entity</Default>
+</Parameter>
+
+<Parameter name="Enabled">
+<Default>1</Default>
+</Parameter>
+
+<Method name="Create">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim objPlugin as iKnow.SetAnalysisPlugin
+	#Dim className as %String
+	#Dim obj as %String
+	#Dim sc,Status as %Status
+	Set Status=$$$OK
+	Do ##class(iKnow.SetAnalysisPlugin).%KillExtent()
+	set result = ##class(%ResultSet).%New("%Dictionary.ClassDefinitionQuery:SubclassOf")
+	do result.Execute("iKnow.SetAnalysisPlugin")
+	while (result.Next()) {
+		set className = result.GetData(1)
+		continue:className=""
+		set obj=$classmethod(className,"%New")
+		set objPlugin=##class(iKnow.SetAnalysisPlugin).%New()
+		Set objPlugin.PluginId           = obj.#PluginId
+		Set objPlugin.Order              = obj.#Order
+		Set objPlugin.Name               = obj.#Name
+		Set objPlugin.ShortDescription   = obj.#ShortDescription
+		Set objPlugin.LongDescription    = obj.#LongDescription
+		Set objPlugin.InputLabel         = obj.#InputLabel
+		Set objPlugin.SetLabel           = obj.#SetLabel
+		Set objPlugin.InputSize          = obj.#InputSize
+		Set objPlugin.iKnowDomain        = obj.#iKnowDomain
+		Set objPlugin.InputSet           = obj.#InputSet
+		Set objPlugin.InputPattern       = obj.#InputPattern
+		Set objPlugin.Metafield          = obj.#Metafield
+		Set objPlugin.TermType           = obj.#TermType
+		Set objPlugin.InputPlaceholder   = obj.#InputPlaceholder
+		Set objPlugin.ClassName          = obj.%PackageName()_"."_obj.%ClassName()
+		Set objPlugin.Enabled            = obj.#Enabled
+		Set objPlugin.DisableManualSelection = obj.#DisableManualSelection
+		Set sc = objPlugin.%Save()
+		If sc'=$$$OK Do $SYSTEM.Status.DisplayError(sc) Set Status=sc
+	}
+	Quit Status
+]]></Implementation>
+</Method>
+
+<Method name="GetActions">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>*ActionList:%String,FirstCall:%Boolean=1,Help:%Boolean=0</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set sc= $$$OK
+	Kill ActionList
+	Set ActionList=0
+	Set objSQLStatement=##class(%SQL.Statement).%New()
+	Set Sql = "Select Id, Name, InputLabel, InputSize, iKnowDomain, InputSet, SetLabel, Metafield, ShortDescription, InputPattern, InputPlaceholder, Order, DisableManualSelection From iKnow.SetAnalysisPlugin Where Enabled = 1 Order By Order,Name"
+	If Help Set Sql = "Select Id, Name, ShortDescription, LongDescription From iKnow.SetAnalysisPlugin Where Enabled = 1"
+	Set sc = objSQLStatement.%Prepare(Sql)
+	Set objResult = objSQLStatement.%Execute()
+	While objResult.%Next() {
+		Set Fields=""
+		For iField=1:1:objResult.%ResultColumnCount Set Fields=Fields_$ListBuild(objResult.%GetData(iField))
+		Set ActionList($i(ActionList))=Fields
+	}
+	If 'ActionList,FirstCall {
+		Do ..Create()  ;Plugins were never created
+		Set sc=..GetActions(.ActionList, 0)
+	}
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="Execute">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String="",&Filters:%String,objFilter:%String="",&resultPtr:%String,Batch:%Boolean=0,Blacklists:%String=""]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim DomainId as %Integer
+	#Dim iFilter, inc as %Integer
+	#Dim Ok as %String
+	#Dim FilterData, BatchId, BatchName as %String
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select ClassName into :PluginClass from iKnow.SetAnalysisPlugin Where ID = :PluginId)
+	If SQLCODE'=0 Quit 0
+	&sql(Select iKnowBlacklistIds into :Blacklists from iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+	If objFilter="",$Order(Filters(""))'="" {
+		Set objFilter=""
+		Set iFilter="" For {
+			Set iFilter=$Order(Filters(iFilter),1,FilterData) If iFilter="" Quit
+			Do ##class(iKnow.SetAnalysis).BuildFilter(DomainId, $List(FilterData,1), $List(FilterData,2), $List(FilterData,3), .objFilter)
+		}
+	}
+	If Batch = 0 {
+		Set Ok = $ClassMethod(PluginClass, "GetPlugin", PluginId, ProjectId, Input, InputPattern, InputSet, objFilter, .resultPtr, Blacklists)
+	} Else {
+		Do ##class(iKnow.SetAnalysis.Batches).CreateBatch(ProjectId, .BatchId, .BatchName)
+		Set ^iKnow.SetAnalysis(ProjectId, BatchName) = $ListBuild(BatchId)
+		Set ^iKnow.SetAnalysis(ProjectId, BatchName, "D", 1)=$ListBuild(0,PluginId,Input,InputSet)
+  
+  		Set iFilter="" For inc=1:1 {
+			Set iFilter=$Order(Filters(iFilter),1,FilterData) If iFilter="" Quit
+			Set ^iKnow.SetAnalysis(ProjectId, BatchName, "F", inc) = FilterData
+  		}
+		Job ..Batch(BatchId,BatchName,PluginId,PluginClass, ProjectId, Input, InputPattern, InputSet, objFilter, Blacklists)::1
+		Set Ok=$Test
+		If 'Ok Do ##class(iKnow.SetAnalysis.Batches).SetError(ProjectId, BatchId, "No Job")
+	}
+	Quit Ok
+]]></Implementation>
+</Method>
+
+<Method name="Batch">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>BatchId:%Integer,BatchName:%String,PluginId:%Integer,PluginClass:%String,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,Blacklists:%String=""</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Try {
+		Do $ClassMethod(PluginClass, "GetPlugin", PluginId, ProjectId, Input, InputPattern, InputSet, objFilter, .resultPtr)
+		;save resultEnt in a BatchSet
+		;resultEnt(sort, "ent id")=ent value
+		;resultPtr:^iKnow.SetAnalysisTemp(resultPtr,"S",sort,id)=value
+		Set Sort="" 
+		For  {
+			Set Sort=$Order(^iKnow.SetAnalysisTemp(resultPtr,"S",Sort)) If Sort="" Quit
+			Set SortId=""
+			For {
+				Set SortId=$Order(^iKnow.SetAnalysisTemp(resultPtr,"S",Sort, SortId)) If SortId="" Quit
+				Set Id=""
+				For {
+					Set Id=$Order(^iKnow.SetAnalysisTemp(resultPtr,"S",Sort, SortId, Id)) If Id="" Quit
+					Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,Id)
+					Set ^iKnow.SetAnalysis(ProjectId, BatchName, "X", Value)=Id
+				}
+			}
+		}
+		Do ##class(iKnow.SetAnalysis.Batches).SetEnd(ProjectId, BatchId)
+	} Catch {
+		Do ##class(iKnow.SetAnalysis.Batches).SetError(ProjectId, BatchId, $ZError)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetValue">
+<Description>
+Param1 = ProjectId or resultPtr</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,resultPtr:%String,Id:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+///get value of Id (method 'GetValue' from plugin)
+	&sql(Select ClassName Into :PluginClass From iKnow.SetAnalysisPlugin Where Id = :PluginId)
+	If SQLCODE'=0 Quit ""
+	Set Value = $ClassMethod(PluginClass, "GetPluginValue", ProjectId, resultPtr, Id)
+	Quit Value
+]]></Implementation>
+</Method>
+
+<Method name="GetId">
+<Description>
+Param1 = ProjectId or resultPtr</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,resultPtr:%String,Value:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+///get Id of value (method 'GetId' from plugin)
+	&sql(Select ClassName Into :PluginClass From iKnow.SetAnalysisPlugin Where Id = :PluginId)
+	If SQLCODE'=0 Quit ""
+	Set Id = $ClassMethod(PluginClass, "GetPluginId", ProjectId, resultPtr, Value)
+	Quit Id
+]]></Implementation>
+</Method>
+
+<Method name="SetMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%Integer,resultPtr:%String,SaveSet:%String</FormalSpec>
+<Implementation><![CDATA[
+	Try {
+		&sql(Select ClassName, TermType Into :PluginClass, :TermType From iKnow.SetAnalysisPlugin Where Id = :PluginId)
+		Do $ClassMethod(PluginClass, "SetPluginMembers", ProjectId, resultPtr, SaveSet, TermType)
+	} Catch {
+		Do ##class(iKnow.SetAnalysis).Log("Error in method SetMembers : "_$ZE)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetMetafieldValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>domainId,srcId,fieldId,fieldName,fieldMethod</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Try {
+		If fieldId="" {
+			Set Value = srcId
+			If fieldMethod '= "" {
+				Try {
+					Set Value = $ClassMethod(..PartClass(fieldMethod), ..PartMethod(fieldMethod), domainId, srcId)
+				} Catch {
+					Set Value=$ze
+				}
+			} elseif $Piece(fieldName,":",1)="iTable" {
+				#Dim objResult as %SQL.StatementResult
+				Set objDomain=##class(%iKnow.Domain).OpenId(domainId)
+				;Set SQL="Select Ref"_$Piece(fieldName,":",2)_" from "_objDomain.Name_"_tables.Source where %ID = "_srcId
+				;Set objSQL=##class(%SQL.Statement).%New()
+				;Set ok=objSQL.%Prepare(SQL)
+				;If ok {
+				;	Set objResult=objSQL.%Execute()
+				;	if objResult.%Next() Set Value=objResult.%GetData(1)
+				;}
+				Set Value=$ClassMethod(objDomain.Name_".tables.RefTable",$Piece(fieldName,":",2)_"GetStored",srcId)
+			}
+		} else {
+			Set Value = ##class(%iKnow.Queries.MetadataAPI).GetValueById(domainId, fieldId, srcId)
+		}
+	} Catch {
+		Set ^dwerror=$ZE
+	}
+	Quit Value
+]]></Implementation>
+</Method>
+
+<Method name="PartMethod">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Ref:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit $piece(Ref, ".", $length(Ref,"."))
+]]></Implementation>
+</Method>
+
+<Method name="PartClass">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Ref:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit $piece(Ref, ".", 1, $length(Ref,".")-1)
+]]></Implementation>
+</Method>
+
+<Method name="GetPlugin">
+<Description><![CDATA[
+Each derived plugin should override & implement 4 methods : GetPlugin, GetPluginValue, GetPluginId, SetPluginMembers]]></Description>
+<Abstract>1</Abstract>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<Abstract>1</Abstract>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit ""
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<Abstract>1</Abstract>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit ""
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<Abstract>1</Abstract>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+</Method>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+ ------------------- plugins ---------------------------
+ Format for a plugin method :
+ param1 = PluginId      : Plugin id
+ param2 = ProjectId     : Project id
+ param3 = Input         : Input field from SetAnalysis page
+ param4 = InputPattern
+ param5 = InputSet
+ param6 = objfilter     : iKnow filter instance
+ param7 = resultEnt     : result array with entities
+                          format : resultEnt(sortorder, Id) = $lb(entityValue)
+                                   resultEnt(sortorder, Id) = $lb(crcConcept_"|"_crcRelation_"|"_crcConcept)
+ param8 = blacklists    : $listbuild of blacklistIds
+*/
+]]></Content>
+</UDLText>
+
+<Method name="StoreMetaValues">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entityList,result,OnlyMembers</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set iSource=""
+	For {
+		Set iSource=$Order(result(iSource),1,data) Quit:iSource=""
+		Set srcId=$list(data,1)
+		Set Value=..GetMetafieldValue(DomainId, srcId, fieldId, fieldName, fieldMethod)
+		If Value'="",$Data(OnlyMembers),'$Data(OnlyMembers(Value)) Continue  ;member is not in the 'members-only' list
+		If Value'="" {
+			Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"M",Value,$List(entityList,1))=""
+			If '$Data(^iKnow.SetAnalysis(ProjectId,SaveSet,"P",Value,srcId)) Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"P",Value,srcId)=""
+		}
+		Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"SRC",srcId)=""
+
+		Do ..CalculateNegation(TermType, ProjectId, SaveSet, DomainId, Value, srcId, entityList)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CalculateNegation">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>TermType,ProjectId,SaveSet,DomainId,Value,srcId,entityList</FormalSpec>
+<Implementation><![CDATA[
+ 
+		Set EntityListForNegation=entityList
+
+		If TermType="ENTITY" {
+			set sc = ##class(%iKnow.Queries.SentenceAPI).GetByEntityIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+		} elseif TermType="CRC" {
+			set sc = ##class(%iKnow.Queries.SentenceAPI).GetByCrcIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+			Set EntityListForNegation=""
+			For iEntityListForNegation=1:1:$ListLength(entityList) {
+				Set tempList=##class(%iKnow.Queries.CrcAPI).GetValue(DomainId,$List(entityList,iEntityListForNegation))
+				;get id's for tempList
+				Set tempListOut=""
+				For i=1:1:$ListLength(tempList) {
+					Set tempListOut=tempListOut_$listbuild(##class(%iKnow.Queries.EntityAPI).GetId(DomainId, $list(tempList,i)))
+				}
+				Set EntityListForNegation=EntityListForNegation_tempListOut
+			}
+		} elseif TermType="PATH" {
+			set sc = ##class(%iKnow.Queries.SentenceAPI).GetByPathIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+		}
+		If Value'="" { 
+			Set iCount="" For  {
+				Set iCount=$Order(resultSent(iCount),1,dataSent) If iCount="" Quit
+				Set sentId=$list(dataSent,3)
+				Kill resultAttr
+				Do ##class(%iKnow.Queries.SentenceAPI).GetAttributes(.resultAttr, DomainId, sentId)
+				/*
+				or :
+
+	;this code once :
+	Try {
+		Set sc = ##class(%DeepSee.DomainExpert.utils.DomainUtils).domainById(DomainId, .domainName, .package, .schema)
+   		Set DomainExpertHighlight=$Select(+sc=0:0,schema="":0,1:1)
+	} Catch {
+		Set DomainExpertHighlight=0
+	}
+	If DomainExpertHighlight {
+		Set QuotedTerms=""
+		For iTerm=1:1:$ListLength(entityList) {
+			Set QuotedTerms=QuotedTerms_$lb(##class(%iKnow.Queries.EntityAPI).GetValue(domainId,$List(entityList,iTerm)))
+		}
+	}
+	;this code for each sentence :
+	If DomainExpertHighlight {
+		Do ##class(%DeepSee.DomainExpert.utils.HtmlUtils).sentenceHTML(schema_".",sentId,QuotedTerms,.Sentence,.listScore)
+		;listScore=$lb(lo,hi)
+		lo=-1     : no entity to highlight : blue
+		lo=0,hi=0 : affirmative : darkblue
+		lo=10,hi=50or100 : some affirmative, some negative : orange
+		lo=50,hi=50 : only negations : red
+		Set Negation=$Select(lo=-1:"null",(lo=50)&(hi=50):1,(lo=0)&(hi=0):0,1:.5)
+		Do ..AddMemberSentence(ProjectId, SaveSet, "P", Value, srcId, sentId, Negation)
+		--> todo : add .5 : sentence negation orange
+	} else .. rest of code
+				*/
+			Set Negation=""
+				If $Data(resultAttr) {
+					Set iAttr="", NegationData=""
+					For  {
+						Set iAttr=$Order(resultAttr(iAttr)) If iAttr="" Quit
+						If $List(resultAttr(iAttr),2)="negation" Set NegationData=resultAttr(iAttr) Quit
+					}
+					If (NegationData'="")&(TermType'="PATH") {
+						Do ##class(%iKnow.Queries.SentenceAPI).GetParts(.resultParts, DomainId, sentId, 1)
+						;if TermType="CRC" -> resultParts(iPart,"CRCMASTER" or 'CRCRELATION" or "CRCSLAVE") = $list(occid, uniid)
+						Set iPart="" For {
+							Set iPart=$Order(resultParts(iPart)) If iPart="" Quit
+							If $List(resultParts(iPart),1) {
+								If ##class(%iKnow.Queries.EntityAPI).IsAttributed(DomainId, $List(resultParts(iPart),1),$$$IKATTNEGATION) {
+									If $ListFind(EntityListForNegation,$List(resultParts(iPart),2)) Set Negation=1
+								}
+							}
+						}
+						;For iPart=$List(NegationData,3):1:($List(NegationData,3)+$List(NegationData,4)-1) {
+						;	If $listFind(entityList,$List(resultParts(iPart),2)) Set Negation=1
+						;}
+					} elseif (NegationData'="") {
+						Set Negation=1
+					}
+				}
+				Do ..AddMemberSentence(ProjectId, SaveSet, "P", Value, srcId, sentId, Negation)
+			}
+		}
+]]></Implementation>
+</Method>
+
+<Method name="AddMemberSentence">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,SelKey,Member,srcId,sentId,Negation</FormalSpec>
+<Implementation><![CDATA[
+	Set ^iKnow.SetAnalysis(ProjectId, Set, SelKey, Member, srcId, sentId ) = Negation
+	Set srcNegation=$Get(^iKnow.SetAnalysis(ProjectId, Set, SelKey, Member, srcId))
+	If Negation {
+		Set ^iKnow.SetAnalysis(ProjectId, Set, SelKey, Member, srcId) = $Select(srcNegation="":2,srcNegation=0:1,srcNegation=1:1,srcNegation=2:2)
+	} else {
+		Set ^iKnow.SetAnalysis(ProjectId, Set, SelKey, Member, srcId) = $Select(srcNegation="":0,srcNegation=0:0,srcNegation=1:1,srcNegation=2:1)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="ReplacePattern">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>S:%String,InputPattern:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set Pattern=##class(iKnow.SetAnalysis.Patterns).GetPattern(InputPattern)
+	If Pattern'="" {
+		Set startLocate=$Locate(S, Pattern, ,endLocate, strLocate)
+		If startLocate>0 {
+			Set firstPart=$Extract(S,1,startLocate-1)
+			Set nextPart=$Extract(S,endLocate,*)
+			Set S = ##class(iKnow.SetAnalysis.Patterns).CalculateRule(InputPattern, firstPart,nextPart)
+		}
+	}
+	Quit S
+]]></Implementation>
+</Method>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+*******************************                  *********************************************
+****************************** GetRegexTop Plugin ********************************************
+*******************************                  *********************************************
+*/
+]]></Content>
+</UDLText>
+
+<Method name="GetRegexTop">
+<Description>
+Example : find all entities with tnm classification :
+         use Regex expression = \w*t[0-4] ?n[0-3] ?m[1-4]\w*</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	If $Get(Input)="" Quit 0
+	Set sc=$$$OK
+	Try {
+		Do ##class(%iKnow.Queries.EntityAPI).GetTop("^||Temp",DomainId,0)
+		Set resultEnt=$Get(resultEnt,0)
+		Set iCount="" For {
+			Set iCount=$Order(^||Temp(iCount),1,Data)
+			If iCount="" Quit
+			Set Entity=$List(Data,2)
+			If $Match(Entity,Input) {
+				Set ^iKnow.SetAnalysisTemp(resultPtr,"S",iCount,$list(Data,1))=$ListBuild(Entity_" [ "_$list(Data,3)_" ]")
+				Set resultEnt=resultEnt+1
+			}
+		}
+	} catch {
+		set sc=0
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetRegexTopValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+]]></Implementation>
+</Method>
+
+<Method name="SetRegexTopMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	Set entList=""
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		Set entList=entList_$lb(id)
+	}
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+
+	Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.result, DomainId, entList, 0)
+	Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.result)
+]]></Implementation>
+</Method>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+  sort, "ent "_id = display value -> select -> find metafieldId's
+  sort, "crc "_id = display value -> select -> find metafieldId's
+  sort, "w "_id   = display value -> select -> call function per id to find metafieldId's
+
+*/
+]]></Content>
+</UDLText>
+
+<Method name="GetPublicProjectSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[PubSetName:%String,&ProjectId,&Set]]></FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	If PubSetName'["." Quit 0  ;public set format : ProjectName.Set
+	Set setName=$Piece(PubSetName,".",2,*)
+	Set projectName=$Piece(PubSetName,".",1)
+	&sql(Select Name, ProjectId into :pubSetName, :pubProjectId from iKnow_SetAnalysis.Sets
+	     Where (ProjectId->IsPublic = 1) And (Name = :setName) And (ProjectId->Name = :projectName)
+	     )
+	If SQLCODE'=0 Quit 0
+	Set ProjectId = pubProjectId
+	Set Set = pubSetName
+	Quit 1
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysisPluginD</DataLocation>
+<DefaultData>SetAnalysisPluginDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysisPluginD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysisPluginI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysisPluginS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetAnalysisPluginDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Name</Value>
+</Value>
+<Value name="3">
+<Value>Description</Value>
+</Value>
+<Value name="4">
+<Value>MethodGetList</Value>
+</Value>
+<Value name="5">
+<Value>MethodGetValue</Value>
+</Value>
+<Value name="6">
+<Value>MethodGetMetafieldId</Value>
+</Value>
+<Value name="7">
+<Value>MethodSetMembers</Value>
+</Value>
+<Value name="8">
+<Value>InputSize</Value>
+</Value>
+<Value name="9">
+<Value>InputLabel</Value>
+</Value>
+<Value name="10">
+<Value>iKnowDomain</Value>
+</Value>
+<Value name="11">
+<Value>InputSet</Value>
+</Value>
+<Value name="12">
+<Value>Metafield</Value>
+</Value>
+<Value name="13">
+<Value>ShortDescription</Value>
+</Value>
+<Value name="14">
+<Value>LongDescription</Value>
+</Value>
+<Value name="15">
+<Value>SetLabel</Value>
+</Value>
+<Value name="16">
+<Value>MethodGetId</Value>
+</Value>
+<Value name="17">
+<Value>TermType</Value>
+</Value>
+<Value name="18">
+<Value>InputPattern</Value>
+</Value>
+<Value name="19">
+<Value>InputPlaceholder</Value>
+</Value>
+<Value name="20">
+<Value>ClassName</Value>
+</Value>
+<Value name="21">
+<Value>Order</Value>
+</Value>
+<Value name="22">
+<Value>Enabled</Value>
+</Value>
+<Value name="23">
+<Value>DisableManualSelection</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

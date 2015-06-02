@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngProject.js" application="/csp/setanalysis/" default="1"><![CDATA[
+(function(){
+  var app = angular.module('ProjectsApp', ['ngResource','ngRoute']);
+
+  app.factory('restProjectDetails', function ($resource) {
+    return $resource(
+		"http://"+document.domain+"\\:57772/csp/setanalysis/rest/api/1.1/projectdetail/:projectid", {}, {
+		query: { method: "GET", isArray: false }
+		});
+		
+   }); //app.factory 'restProjectDetails'
+
+  app.factory('restProjectSave', function ($resource) {
+    return $resource(
+		"http://"+document.domain+"\\:57772/csp/setanalysis/rest/api/1.1/projectsave", {}, {
+		update : {method: 'POST'}
+		});
+   }); //app.factory 'restProjectSave'
+
+  app.factory('restBlacklists', function ($resource) {
+    return $resource(
+		"http://"+document.domain+"\\:57772/csp/setanalysis/rest/api/1.1/blacklists/:domain", {}, {
+		query : { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restBlacklists'
+   
+  app.controller('ProjectsController', ['$scope', '$resource', '$route', 'restProjectDetails', 'restProjectSave', 'restBlacklists', function($scope,$resource,$route,restProjectDetails,restProjectSave, restBlacklists) {
+    this.detail = restProjectDetails.query({projectid:$scope.projectId},function(data) {
+    });
+  
+    $scope.$route = $route;
+
+    this.options = restBlacklists.query({domain:1},function(data) {
+    });
+   $scope.saveForm = function(project) {
+		restProjectSave.update(project.detail,function(data) {
+
+		});
+		alert('saved via rest..');
+   } 
+   
+    
+  }]); //app.controller 'projectController'
+  
+
+ app.controller('RouteController', ['$scope','$route','$routeParams','$location',function($scope, $route, $routeParams, $location) {
+     $scope.$route = $route;
+     $scope.$location = $location;
+     $scope.$routeParams = $routeParams;
+ }]);
+
+    var listOptions = [
+    {id:"id1", text:"option1", type:"A"},
+    {id:"id2", text:"option2", type:"A"},
+    {id:"id3", text:"option3", type:"C"}
+    ];
+  
+    var aProject = {
+      Name : "myProjectName",
+	  Description : "myProjectDescription",
+	  Domain : "myProjectDomain",
+	  MetadataMethod : "myMetadataMethod",
+	  MetadataField : "id2",
+	  Blacklist: ["id2","id3"]
+    }
+
+
+})();]]></CSP>
+</Export>

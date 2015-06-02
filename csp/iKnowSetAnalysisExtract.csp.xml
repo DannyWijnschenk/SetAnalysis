@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisExtract.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+<head>
+<title>	iKnow SetAnalysis Extract table</title>
+</head>
+<style type="text/css">
+table
+{
+border-collapse:collapse;
+}
+#grid table {
+border-collapse:collapse;
+background-color: white;
+}
+#grid table, #grid td, #grid th {
+border:1px solid black;
+}
+#grid td, #grid th
+{
+padding:5px;
+}
+</style>
+
+<script language="cache" runat="server">
+  Set ProjectName=$Get(%session.Data("projectName"))
+  If ProjectName'="" {
+	  &sql(Select Id into :ProjectId From iKnow_SetAnalysis.Projects Where Name = :ProjectName)
+	  Set SQL="select Member, XKey, XValue, SourceId, Sentence from iKnow_SetAnalysis.XKeyValues Where ProjectId = " _ ProjectId
+  } else {
+  	  Set SQL = ""
+  }
+</script>
+
+<body>
+  <csp:if condition="$L(SQL)>0">
+	  <h2>#(SQL)#</h2>
+	<br>
+	  <table id="grid">
+	    <tr>
+	      <th>Member</th>
+	      <th>XKey</th>
+	      <th>XValue</th>
+	      <th>SourceId</th>
+	      <th>Sentence</th>
+	    </tr>
+	    <csp:SQLQUERY NAME='query'>
+	     #(SQL)#
+	   </csp:SQLQUERY>
+	    <csp:WHILE CONDITION="query.Next()">
+	      <tr>
+	        <td>#(query.Get("Member"))#</td>
+	        <td>#(query.Get("XKey"))#</td>
+	        <td>#(query.Get("XValue"))#</td>
+	        <td>#(query.Get("SourceId"))#</td>
+	        <td>#(query.Get("Sentence"))#</td>
+	      </tr>
+	    </csp:WHILE>
+	  </table>
+	<csp:else>
+	  No valid project or page has experied !
+	</csp:if>
+</body>
+</html>
+]]></CSP>
+</Export>

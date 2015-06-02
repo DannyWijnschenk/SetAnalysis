@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngPatients.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<!DOCTYPE html>
+<html ng-app="PatientsApp">
+  <head>
+<!-- <link rel="stylesheet" type="text/css" href="nglib/bootstrap/css/bootstrapSpacelab.min.css" /> -->
+ <link rel="stylesheet" type="text/css" href="nglib/bootstrap/css/bootstrap.min.css" />
+ <link rel="stylesheet" type="text/css" href="nglib/additional.css" />
+ </head>
+  <body>
+    <div ng-controller="PatientsController">
+      <div class="well">
+        <label>
+          <input type="text" ng-model="criteria"></input>&nbsp;<span class="glyphicon glyphicon-search"></span>
+        </label>
+      </div>
+      <table class="table table-hover">
+        <thead>
+          <th ng-click="sort('PatientId')">PatientId
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('PatientId'), 'glyphicon glyphicon-chevron-down': isSortDown('PatientId')}"></i>
+          </th>
+          <th ng-click="sort('Name')">Name
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('Name'), 'glyphicon glyphicon-chevron-down': isSortDown('Name')}"></i>
+          </th>
+          <th ng-click="sort('Street')">Street
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('Street'), 'glyphicon glyphicon-chevron-down': isSortDown('Street')}"></i>
+          </th>
+          <th ng-click="sort('City')">City
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('City'), 'glyphicon glyphicon-chevron-down': isSortDown('City')}"></i>
+          </th>
+          <th ng-click="sort('Tags')">Tags
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('Tags'), 'glyphicon glyphicon-chevron-down': isSortDown('Tags')}"></i>
+          </th>
+    
+      <th></th>
+        </thead>
+        <tr ng-repeat="patient in filteredPatients = (patientsData | filter:criteria | orderBy:sortField:reverse)" >  
+          <td>{{patient.PatientId}}</td>
+          <td>{{patient.Name}}</td>
+          <td>{{patient.Street}}</td>
+          <td>{{patient.City}}</td>
+          <td><div ng-repeat="tag in patient.Tags">{{tag.Category}} : {{tag.Tag}}</div></td>
+          <td>
+            <a class="icon-link" ng-href="ngPatientsApp.csp#Patient/{{patient.PatientId}}"> <span class="glyphicon glyphicon-user"></span> </a>
+          </td>
+        </tr>
+	   </table>
+	 </div>
+
+  </body>
+</html>
+]]></CSP>
+</Export>

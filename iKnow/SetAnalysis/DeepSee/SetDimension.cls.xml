@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.DeepSee.SetDimension">
+<Description><![CDATA[
+
+add following dimension to your DeepSee cube that is based on the same factid as the project's metafieldid
+(for example, if your setanalysis projects are based on patientid, your DS cube should also be based on a class with patientid as the id)
+ <dimension name="Sets" disabled="false" hasAll="true" type="computed" dimensionClass="iKnow.SetAnalysis.DeepSee.SetDimension" hidden="false" showHierarchies="default">
+   <hierarchy name="H1" disabled="false">
+* you can add as much projects as you want like this (factname is the name of the project in SetAnalysis, name is the caption you want to display in DeepSee) :
+     <level factName="SmokersProject" name="SmokersProject" disabled="false" list="false" useDisplayValue="false" useAsFilter="true">
+     </level>
+
+     <level factName="ProjectOne" name="ProjectOne" disabled="false" list="false" useDisplayValue="false" useAsFilter="true">
+     </level>
+
+* you can also add a factName 'all' that will include all projects in your cube (but beware : as of now there is no security to restrict the list)
+     <level factName="all" name="AllProjects" disabled="false" list="false" useDisplayValue="false" useAsFilter="true">
+     </level>
+
+   </hierarchy>
+ </dimension>]]></Description>
+<IncludeCode>%IKInclude</IncludeCode>
+<Super>%DeepSee.ComputedDimension.Base</Super>
+<TimeCreated>63105,48516.003659</TimeCreated>
+
+<Property name="%projectID">
+<Type>%String</Type>
+</Property>
+
+<Method name="%ComputeIndexKey">
+<Description>
+Compute a hash key for a given member member.</Description>
+<FormalSpec>pMemberKey:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit $ZCRC(pMemberKey,7)
+]]></Implementation>
+</Method>
+
+<Method name="%Count">
+<Description>
+Return number of members.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pCube:%String,pDimNo:%Integer,pHierNo:%Integer,pLevelNo:%Integer</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+	set tProjectId = ..%GetProjectID(pCube, pDimNo, pHierNo, pLevelNo)
+	If tProjectId = "*" {
+		&SQL(SELECT COUNT(*) INTO :tCount FROM iKnow_SetAnalysis.Sets WHERE (DeepSeeEnabled = 1))
+	} elseIf tProjectId '= "" {
+		&SQL(SELECT COUNT(*) INTO :tCount FROM iKnow_SetAnalysis.Sets WHERE (ProjectId = :tProjectId) And (DeepSeeEnabled = 1))
+	} else {
+		Set tCount = 0
+	}
+	quit tCount
+]]></Implementation>
+</Method>
+
+<Method name="%MemberSearch">
+<Description><![CDATA[
+Execute a search for members.<br/>
+Return a list of the form:<br/>
+pList(n) = $LB(value,key)]]></Description>
+<FormalSpec>pSearchKey:%String,*pList:%List</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set tSC = $$$OK
+	Try {
+		set tStatement = ##class(%SQL.Statement).%New()
+		If ..%projectID = "*" {
+			set tSQL = "SELECT ProjectId->Name as ProjectName,Name FROM iKnow_SetAnalysis.Sets WHERE (DeepSeeEnabled = 1)"
+		} else {
+			set tSQL = "SELECT Name FROM iKnow_SetAnalysis.Sets WHERE (ProjectId = "_..%projectID_") And (DeepSeeEnabled = 1)"
+		}
+		set:pSearchKey'="" tSQL = tSQL _ " AND %UPPER(Name) LIKE '%"_$$$UPPER(pSearchKey)_"%'"
+		set tSQL = tSQL_ " Order By Name"
+		set tSC = tStatement.%Prepare(tSQL)
+		quit:$$$ISERR(tSC)
+		
+		set tResult = tStatement.%Execute()
+		while tResult.%Next() {
+			set tSetName = $Select(..%projectID="*":tResult.%Get("ProjectName") _ "." _ tResult.%Get("Name"),1: tResult.%Get("Name"))
+			set pList($i(pList)) = $lb(tSetName, tSetName)
+		}
+	}
+	Catch(ex) {
+		Set tSC = ex.AsStatus()
+	}
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="%OnComputeBitset">
+<Description>
+Do the actual work of building the bitset.
+Implemented in subclasses.</Description>
+<FormalSpec>pSpec:%String,pIndexKey:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set tSC = $$$OK
+	Try {
+		set tBaseCube = $$$DeepSeeIndex(..%baseCube)
+		
+		// ID conversion!
+		set tStatement = ##class(%SQL.Statement).%New()
+		set tSC = tStatement.%Prepare("SELECT Member FROM iKnow_SetAnalysis.SetMembers WHERE SetId = ?")
+		quit:$$$ISERR(tSC)
+		
+		If ..%projectID = "*" {
+			set projectName=$Piece(pSpec,".",1),pSpec=$Piece(pSpec,".",2,*)
+			&sql(Select ID into :projectId from iKnow_SetAnalysis.Projects Where Name = :projectName)
+			If SQLCODE=0 {
+				set tSetId = ##class(iKnow.SetAnalysis.Sets).GetId(projectId, pSpec)
+			} else {
+				set tSetId = ""
+			}
+		} else {
+			set tSetId = ##class(iKnow.SetAnalysis.Sets).GetId(..%projectID, pSpec)
+		}
+		set tResult = tStatement.%Execute(tSetId)
+		set tBits = "", tPrevChunk = ""
+		while tResult.%Next() {
+			set tMember = tResult.%Get("Member")
+			set tFactId = $o($$$DeepSeeIndexGLVN(tBaseCube, "%sourceId", tMember, ""))
+			$$$IKBITOFFPOS(tFactId,tChunk,tPos)
+			if (tChunk'=tPrevChunk) {
+				set:tPrevChunk tCache(tPrevChunk) = $bitlogic(tBits)
+				set tBits = $g(tCache(tChunk)), tPrevChunk = tChunk
+			}
+			set $bit(tBits,tPos) = 1
+		}
+		if (tPrevChunk) {
+			set tCache(tPrevChunk) = $bitlogic(tBits)
+		}
+		
+		kill $$$DeepSeeIndexGLVN(..%baseCube, ..%factNumber, pIndexKey)
+		merge $$$DeepSeeIndexGLVN(..%baseCube, ..%factNumber, pIndexKey) = tCache
+		
+	}
+	Catch(ex) {
+		Set tSC = ex.AsStatus()
+	}
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="%OnGetComputedMembers">
+<Description><![CDATA[
+Find the set of members for this computed dimension object.<br/>
+pMemberList(n) = $LB(id,name,key)<br/>
+This can be implemented by subclasses.
+<p>This method is deprecated, implement <method>%OnGetComputedMembersFiltered</method>
+instead.</p>]]></Description>
+<FormalSpec><![CDATA[&pMemberList]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set tSC = $$$OK
+	Try {
+		set tStatement = ##class(%SQL.Statement).%New()
+		If ..%projectID="*" {
+			set tSQL = "SELECT ProjectId->Name as ProjectName, Id, Name FROM iKnow_SetAnalysis.Sets WHERE (DeepSeeEnabled = 1) Order By Name"
+		} else {
+			set tSQL = "SELECT Id, Name FROM iKnow_SetAnalysis.Sets WHERE (ProjectId = "_..%projectID_") and (DeepSeeEnabled = 1) Order By Name"
+		}
+		set tSC = tStatement.%Prepare(tSQL)
+		quit:$$$ISERR(tSC)
+		
+		set tResult = tStatement.%Execute()
+		while tResult.%Next() {
+			If ..%projectID="*" {
+				set tSetName = tResult.%Get("ProjectName") _ "." _ tResult.%Get("Name")
+			} else {
+				set tSetName = tResult.%Get("Name")
+			}
+			set tSetId = tResult.%Get("Id")
+			set pMemberList($i(pMemberList)) = $lb(tSetId, tSetName, tSetName)
+		}
+	}
+	Catch(ex) {
+		Set tSC = ex.AsStatus()
+	}
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="%Create">
+<Description>
+Create a instance of this dimension class.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pCube:%String,pFactNo:%Integer,pDimNo:%Integer,pHierNo:%Integer,pLevelNo:%Integer</FormalSpec>
+<ReturnType>%DeepSee.ComputedDimension.Base</ReturnType>
+<Implementation><![CDATA[
+	set tObj = ##super(pCube, pFactNo, pDimNo, pHierNo, pLevelNo)
+	set tObj.%projectID = ..%GetProjectID(pCube, pDimNo, pHierNo, pLevelNo)
+	
+	do ##class(%DeepSee.Utils).%GetDimensionFact(pCube, pDimNo, pHierNo, pLevelNo, .tFactName)
+	quit tObj
+]]></Implementation>
+</Method>
+
+<Method name="%GetProjectID">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pCube:%String,pDimNo:%Integer,pHierNo:%Integer,pLevelNo:%Integer</FormalSpec>
+<ReturnType>%DeepSee.ComputedDimension.Base</ReturnType>
+<Implementation><![CDATA[
+	do ##class(%DeepSee.Utils).%GetDimensionFact(pCube, pDimNo, pHierNo, pLevelNo, .tFactName)
+	If tFactName="all" {
+		Set tProjectId="*"
+	} else {
+		&SQL(SELECT Id INTO :tProjectId FROM iKnow_SetAnalysis.Projects WHERE NAME = :tFactName)
+		If SQLCODE'=0 Set tProjectId=0
+	}
+	quit tProjectId
+]]></Implementation>
+</Method>
+
+<Method name="%GetDimType">
+<Description>
+Return the type of this class (used by UI components).</Description>
+<ClassMethod>1</ClassMethod>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	// to force a searchbox being drawn when filtering
+	quit "iKnow"
+]]></Implementation>
+</Method>
+</Class>
+</Export>

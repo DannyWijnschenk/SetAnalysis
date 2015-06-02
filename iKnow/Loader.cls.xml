@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.Loader">
+<IncludeCode>%IKPublic</IncludeCode>
+<TimeCreated>63228,54175.710935</TimeCreated>
+
+<Method name="All">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DropData:%Boolean=0</FormalSpec>
+<Implementation><![CDATA[
+	If DropData {
+		Do ..LogLoad("Dropdata ...")
+		Do ..DropData("UMCU")
+	}
+	Do ..LogLoad("Import files ...")
+	Do ..InstallDomain("UMCU")
+	Do ..LoadSources("UMCU")
+]]></Implementation>
+</Method>
+
+<Method name="InstallDomain">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName</FormalSpec>
+<Implementation><![CDATA[
+	set DomainId = ##class(%iKnow.Domain).GetOrCreateId(DomainName)
+	set objDomain = ##class(%iKnow.Domain).OpenId(DomainId)
+	Do objDomain.SetParameter($$$IKPIGNOREDUPEXTIDS,1)
+	do objDomain.SetParameter($$$IKPSTATUS,1)
+	do objDomain.SetParameter($$$IKPJOBS,2)
+	do ##class(%iKnow.Queries.MetadataAPI).AddField(DomainId,"PatientId",$lb("="),$$$MDDTSTRING,0)
+	do ##class(%iKnow.Queries.MetadataAPI).AddField(DomainId,"VerslagType",$lb("="),$$$MDDTSTRING,1)
+	do ##class(%iKnow.Queries.MetadataAPI).AddField(DomainId,"Sectie",$lb("="),$$$MDDTSTRING,1)
+	do ##class(%iKnow.Queries.MetadataAPI).AddField(DomainId,"VerslagId",$lb("="),$$$MDDTSTRING,1)
+]]></Implementation>
+</Method>
+
+<Method name="LoadSources">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName</FormalSpec>
+<Implementation><![CDATA[
+	Do ..LogLoad("Indexing "_DomainName_" started")
+	If '##class(%iKnow.Domain).Exists(DomainName) {
+		Do ..InstallDomain(DomainName)
+	}
+	Set objDomain=##class(%iKnow.Domain).Open(DomainName)
+	set DomainId = objDomain.Id
+
+	Set objConfig = ##class(%iKnow.Configuration).Create("Config"_DomainName,1,$LISTBUILD("nl","en"),"")
+	Set Processor="%iKnow.Source.Temp.Processor"
+	Set Params=$ListBuild("Latin1")
+  
+	Set objLister=##class(%iKnow.Source.SQL.Lister).%New(DomainId)
+	Do objLister.Init("Config"_DomainName, Processor, Params)
+	Set objLoader=##class(%iKnow.Source.Loader).%New(DomainId)
+
+	Set SQLQuery = "Select ID, PatientId, VerslagType, Sectie, Verslag, VerslagId from Data.Verslagen"  ; where Sectie<>'KLI'"
+	Set SourceId = "ID"
+ 	Set GroupField = "ID"
+ 	Set DataFields = $ListBuild("Verslag")
+	Set MetaFields = $ListBuild("PatientId", "VerslagType", "Sectie", "VerslagId")  ;SQL fields
+	Set MetaKeys   = $ListBuild("PatientId", "VerslagType", "Sectie", "VerslagId")  ;metafields in iKnow
+
+	Set Ok = objLister.AddListToBatch(SQLQuery, SourceId, GroupField, DataFields, MetaFields, MetaKeys, 0)
+	If Ok '= $$$OK {
+		Do $SYSTEM.Status.DecomposeStatus(Ok, .err)
+		Do ..LogLoad("Load "_DomainName_" : lister failed with : "_$Get(err(1))) QUIT
+	}
+
+	Set Ok = objLoader.ProcessBatch()
+	If Ok '= $$$OK {
+		Do $SYSTEM.Status.DecomposeStatus(Ok, .err)
+		Do ..LogLoad("Load "_DomainName_" : loader failed with : "_$Get(err(1))) QUIT
+	} else {
+		Do ..LogLoad("Indexing "_DomainName_" finished")
+	}
+]]></Implementation>
+</Method>
+
+<Method name="DropData">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=""
+	set objDomain = ##class(%iKnow.Domain).Open(DomainName)
+	If $IsObject(objDomain) {
+		do objDomain.DropData(1,1,1)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="LogLoad">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Message:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set Now=$ZDate($H,8)
+	Set ^LogLoad(Now,$i(^LogLoad(Now)))=$ZT($P($H,",",2))_" "_$Get(Message)
+	Use 0 Write !,Message
+]]></Implementation>
+</Method>
+</Class>
+</Export>

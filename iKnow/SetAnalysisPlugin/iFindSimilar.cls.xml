@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.iFindSimilar">
+<Super>iKnow.SetAnalysisPlugin.SQL</Super>
+<TimeCreated>63635,63943.691023</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>14</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>14</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>iFindSimilar</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default>This plugin allows you to select data using an iFind index. You just have to specify the concept like an ordinary Similar plugin (but you can add a * before or after for wildcards)</Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+<Default><![CDATA[Example 1 : <b>*cancer*</b>]]></Default>
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Value</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>Value*</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>50</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>STRING</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<Description><![CDATA[
+SQL needs to give words & metafieldid]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+
+	Set SQL="select distinct %exact(entit.StrippedEntityId->Value) as Value, doc.patientid as Member"
+	Set SQL=SQL_" from %iFind.SimilarEntity('"
+	Set SQL=SQL_Input
+	Set SQL=SQL_"','a') as sim"
+	Set SQL=SQL_" inner join %iFind.Entity as entit on entit.id=sim.entid"
+	Set SQL=SQL_" inner join data_document.document_itext_EntSpreadRec as ent on sim.entid=ent.EntityId"
+	Set SQL=SQL_" inner join data.document as doc on doc.Id = ent.recid"
+
+	Set Input=SQL
+	
+	/* rest of the method is exactly the SQL (##super) implmentation */ 
+	Set sc = ##super(PluginId,ProjectId, Input, InputPattern, InputSet, objFilter,.resultPtr, Blacklists)
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

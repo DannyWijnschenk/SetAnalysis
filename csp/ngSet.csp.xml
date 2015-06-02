@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngSet.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<!DOCTYPE html>
+<html ng-app="SetApp">
+  <head>
+ <link rel="stylesheet" type="text/css" href="nglib/bootstrap/css/bootstrapSpacelab.min.css" />
+ <link rel="stylesheet" type="text/css" href="nglib/additional.css" />
+ </head>
+  <body>
+    <div>
+
+      <form name="frmSet" ng-controller="SetController as set" ng-submit="" class="form-horizontal">
+
+        <fieldset>
+
+          <div class="well">
+            <label>Edit a Set {{setName}}</label>
+          </div>         
+         
+          <!-- Name -->
+          <div class="form-group">
+            <label for="inputName" class="control-label col-xs-2">Name</label>
+            <div class="col-xs-10">
+              <input type="text" class="form-control" id="inputName" placeholder="Name of the set" ng-model="set.detail.Name">
+            </div>
+          </div>
+           
+          <!-- Description -->
+          <div class="form-group">
+            <label for="inputDescription" class="control-label col-xs-2">Description</label>
+            <div class="col-xs-10">
+              <textarea rows=3 class="form-control" id="inputDescription" placeholder="Description of the Set" ng-model="set.detail.Description"></textarea>
+            </div>
+          </div>
+
+          <!-- Plugin -->
+          <div class="form-group">
+            <label for="inputPlugin" class="control-label col-xs-2" >Plugin</label>
+            <div class="col-xs-10">
+              <select id="inputPlugin" name="inputPlugin" class="form-control" ng-change="selectPlugin()" ng-model="set.Plugin" ng-options="plugin.Name group by plugin.type for plugin in plugins">
+
+              </select>
+            </div>
+          </div>  
+          
+          <!-- Concept/Count : [      ] -->
+          <div class="form-group" ng-show="showConcept()">
+            <label for="inputText" class="control-label col-xs-2">{{set.Plugin.InputLabel}}</label>
+            <div class="col-xs-10">
+              <input type="text" class="form-control" id="inputText " placeholder="{{set.Plugin.InputPlaceholder}}" ng-model="set.InputText">
+            </div>
+          </div>
+          <!-- SQL/Valuelist -->
+          <div class="form-group" ng-show="!showConcept()">
+            <label for="inputArea" class="control-label col-xs-2">{{set.Plugin.InputLabel}}</label>
+            <div class="col-xs-10">
+              <textarea rows=4 class="form-control" id="inputArea" placeholder="{{set.Plugin.InputPlaceholder}}" ng-model="set.InputArea"></textarea>
+            </div>
+          </div>
+
+          <!-- Pattern -->
+          <div class="form-group" ng-show="showPattern()">
+            <label for="inputPattern" class="control-label col-xs-2" >Pattern</label>
+            <div class="col-xs-10">
+              <select id="inputPattern" name="inputPattern" class="form-control" ng-model="set.Pattern" ng-options="pattern.Name for pattern in patterns">
+
+              </select>
+            </div>
+          </div>
+
+          <!-- Set -->
+          <div class="form-group" ng-show="showSetList()">
+            <label for="inputSet" class="control-label col-xs-2" >Set</label>
+            <div class="col-xs-10">
+              <select id="inputSet" name="inputSet" class="form-control" ng-model="set.Set" ng-options="setlist.Name for setlist in setslist">
+
+              </select>
+            </div>
+          </div>
+
+          <!-- [Execute]  -->
+          
+
+          <!-- Save | Switch | Delete -->
+          <div class="form-group">
+            <div class="col-xs-offset-2 col-xs-10">
+              <button type="submit" ng-click="executeForm()" class="btn btn-primary">Execute</button>
+            </div>
+          </div>
+        </fieldset>
+      </form>
+
+	</div>
+
+
+  </body>
+</html>
+]]></CSP>
+</Export>

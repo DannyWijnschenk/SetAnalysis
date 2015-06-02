@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngTest.js" application="/csp/setanalysis/" default="1"><![CDATA[
+(function(){
+  var app = angular.module('testrest', ['ngResource']);
+
+  app.factory('restProjects', function ($resource) {
+    return $resource(
+		"http://"+document.domain+"\\:57772/csp/setanalysis/rest/api/1.1/projectdetails", {}, {
+		get:   {method: 'GET'},
+		update:{method: 'POST'}
+		});
+   }); //app.factory 'restProjects'
+
+  app.factory('restSets', function ($resource) {
+    return $resource(
+		"http://"+document.domain+"\\:57772/csp/setanalysis/rest/api/1/projects/:project/sets", {}, {
+		get:   {method: 'GET'},
+		update:{method: 'POST'}
+		});
+   }); //app.factory 'restSet'
+   
+  app.factory('restSetDetail', function ($resource) {
+    return $resource(
+		"http://"+document.domain+"\\:57772/csp/setanalysis/rest/api/1/projects/:project/sets/:set", {}, {
+		get:   {method: 'GET'},
+		update:{method: 'POST'}
+		});
+   }); //app.factory 'restSetDetail'
+
+  app.controller('projectController', ['$scope', '$resource', 'restProjects', function($scope,$resource,restProjects) {
+    $scope.projectsData = restProjects.get(function(data) {
+	  //call back gets called when data received from server, take only array @entrypoints:
+	  $scope.projectsData = data;
+	 
+      $scope.selectProject = function(project) {
+	    $scope.selectedProject = project;
+	  };
+	 
+	  $scope.isSelected = function(project) {
+	    return $scope.selectedProject === project;
+	  }; 
+	 
+    }); //scope.projectsData
+       
+  }]); //app.controller 'projectController'
+  
+  app.controller('setController', ['$scope', '$resource', 'restSets', function($scope,$resource,restSets) {
+    $scope.setsData = restSets.get({project:$scope.selectedProject.link.rel}, function(data) {
+	   //call back gets called when data received from server, take only array @entrypoints:
+	   $scope.setsData = data.entrypoints;
+    });
+    
+  }]); //app.controller 'setController'
+
+  
+})();]]></CSP>
+</Export>

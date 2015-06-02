@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisDashboard.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+
+<title>	iKnow SetAnalysis : Dashboard </title>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+
+</head>
+
+<body>
+<script language="cache" runat="server">
+  Set projectName=$Get(%session.Data("projectName"))
+  &sql(Select ID Into :projectId From iKnow_SetAnalysis.Projects Where Name=:projectName)
+</script>
+
+<script language="javascript">
+
+function CustomDashboard() {
+  //get set from listbox
+  var filterSet = document.getElementById('inputSet').value;
+  //call custom dashboard with et as filter
+  var dashboard=document.getElementById('inputDashboard').value;;
+ if (filterSet != '')
+  {
+   window.open('_DeepSee.UserPortal.DashboardViewer.zen?DASHBOARD='+dashboard+'&EMBED=1&SETTINGS='+filterSet,'workarea');
+  }
+}
+
+</script>
+
+  <div class="tabs">
+  <ul>
+	<li id="tab6"><a href="iKnowSetAnalysis.csp?action=tabproject">Project</a></li>
+	<li id="tab2"><a href="iKnowSetAnalysis.csp?action=tabplugin">Sets</a></li>
+	<li id="tab3"><a href="iKnowSetAnalysis.csp?action=tabformula">Formula</a></li>
+	<li id="tab1"><a href="iKnowSetAnalysis.csp?action=tabfilter">Filter</a></li>
+	<li id="tab4"><a href="iKnowSetAnalysis.csp?action=tabtools">Tools</a></li>
+	<li id="tab5"><a href="iKnowSetAnalysisHelp.csp">Help</a></li>
+  </ul>
+  </div>
+    
+<div class="right">
+  <span class="tabs">
+  <ul>
+	<li id="tab10"><a href="iKnowSetAnalysis.csp?action=setsdetail">Detail</a></li>
+	<li id="tab11"><a href="iKnowSetAnalysis.csp?action=setsoverview">Overview</a></li>
+	<li id="tab12"><a href="iKnowSetAnalysis.csp?action=setstreeview">Treeview</a></li>
+   	<li id="tab13"><a href="iKnowSetAnalysis.csp?action=setspanellookup">Lookup</a></li>
+	<li id="tab14" class="selected"><a href="iKnowSetAnalysisDashboard.csp?action=dashboard">Dashboard</a></li>
+  	<li id="tab15"><a href="iKnowSetAnalysisMembers.csp?action=null">Members</a></li>
+  </ul>
+  </span>
+	&nbsp;&nbsp;<a href='iKnowSetAnalysis.csp?action=refresh'><img src='refresh.png' title='refresh the page'width=16 height=16 border=0></a>
+	&nbsp;<a href='iKnowSetAnalysis.csp?CacheLogout=end'><img src='logout.png' title='logout and go to home page' border=0></a>
+
+  <br>  
+</div>
+<div class="sets">
+<a target="workarea" href="_DeepSee.UI.Analyzer.zen?$NAMESPACE=#($NAMESPACE)#&amp;EMBED=1">DeepSee Analyser</a>
+- Custom Dashboard 
+<select id="inputDashboard">
+  <option>PatientsAge.dashboard</option>
+  <option>PatientsGender.dashboard</option>
+</select> for  
+<script language=SQL name=querySets>
+SELECT Name FROM iKnow_SetAnalysis.Sets Where ProjectId = :projectId And DeepSeeEnabled = 1
+</script>
+  <select id="inputSet" onChange="javascript:CustomDashboard();">
+  <option>Select a set</option>
+  <csp:while condition="querySets.Next()">
+   <option value='#(..EscapeHTML($ZConvert("FILTER:[Sets].[H1].[AllProjects].&["_projectName_"."_querySets.GetData(1)_"]","O","URL")))#'>#(..EscapeHTML(querySets.GetData(1)))#</option>
+  </csp:while>
+  </select>
+<iframe name="workarea" src="_DeepSee.UserPortal.DashboardViewer.zen?DASHBOARD=SetAnalysis.dashboard&EMBED=1&SETTINGS=FILTER:Project.#(projectName)#" frameborder=0 seamless="seamless"  width="100%" width="100%" height="650">
+</iframe>
+
+</div>
+
+</div>
+</body>
+</html>
+]]></CSP>
+</Export>

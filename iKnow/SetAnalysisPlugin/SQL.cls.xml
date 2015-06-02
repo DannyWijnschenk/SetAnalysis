@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.SQL">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63407,59827.635182</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>8</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>10</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>SQL</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[This plugin allows you to select data from SQL tables, that will result in a set of metafield id''s (eg. patient id).<br>Your SQL statement should return columns which are named <i>as Value</i>, and optional <i>as Member</i>, where Value is the displayed value of each element that can be selected, and Member the id of the members in the sets (eg PatientId''s) associated with each Value. You can change <i>as Value</i> by <i>as Entity</i> if the values should be existing iKnow entities. In that case, you do not need to give a Member columns since SetAnalysis can determine those in the iKnow domain.<br> You can ommit Member if the Key id''s are members.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+<Default><![CDATA[Example 1 : <b>select Gender as Value, PatientId as Member from Data.Patients</b><br>This returns a table like <table><tr><td>Female</td></tr><tr><td>Male</td></tr><tr><td>Unknown</td></tr></table>where you can select from. The set will contain all PatientId''s from the selected gender(s). <br>Example 2 : <b>select Distinct DrugName as Entity From Pharmacy.Drugs</b><br>This table will contain all different drugnames, the set will convert the value to iKnow entities if they exist. SetAnalysis will automatically show them with the correct frequency. After selecting them, the appropriate members (eg. PatientIds) associated with each entity will be found.]]></Default>
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>SQL statement</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>Select Col1 as Value, Col2 as Member From MyTable</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>AREA</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>STRING</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<Description><![CDATA[
+SQL needs to give words & metafieldid]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Set sc=$$$OK
+	Try {
+		Set objSQLStatement=##class(%SQL.Statement).%New()
+		Do ##class(iKnow.SetAnalysis).Log("SQL statement : "_Input)
+		Set sc = objSQLStatement.%Prepare(Input)
+		;TODO : look for column names and detect which column is the id, and which is the value
+		; column can be Key, Entity, EntityId, CRC, Path, Sentence or Value
+		If $$$ISERR(sc) {
+			Do ##class(iKnow.SetAnalysis).Log("SQL statement result : "_sc)
+		} else {
+			Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+			Set colId = 1
+			Set colCount = objSQLStatement.%Metadata.columns.Count()
+			Set colValue = $S(colCount=1:1,1:2)
+			Set colMember = 0 ; $S(colCount>colValue:colValue+1,1:0)
+			Set colValueType = ""
+			For iCol = 1:1:colCount {
+				Set colName = $ZCVT(objSQLStatement.%Metadata.columns.GetAt(iCol).colName,"U")
+				If (colName = "KEY") ! (colName = "ID") {
+					Set colId = iCol
+				} elseif (colName = "VALUE") {
+					Set colValue = iCol
+					Set colValueType = ""
+				} elseif (colName = "MEMBER") {
+					Set colMember = iCol
+				} elseif (colName = "ENTITY") {
+					Set colValue = iCol
+					Set colValueType = "ENTITY"
+				} elseif (colName = "ENTITYID") {
+					Set colValue = iCol
+					Set colValueType = "ENTITYID"
+				}  ;TODO : other values like EntityId, Path, CRC, sentence
+			}
+			If colValueType="",colMember=0 {
+				//lets pick a member column since SQL did not provide one
+				Set colMember = $S(colCount>colValue:colValue+1,1:0)
+			}
+			Set objResult = objSQLStatement.%Execute()
+			Set resultEnt=$Get(resultEnt,0)
+			Set ^iKnow.SetAnalysisTemp(resultPtr)=colValueType
+			While objResult.%Next() {
+				Set Value = objResult.%GetData(colValue)
+				If Value'="" {
+					;todo : if entity or entityid and not member col -> get from iknow
+					;       else -> get from member column
+					Set Metafield = $S(+colMember=0:"",1:objResult.%GetData(colMember))
+					If colValueType="ENTITY" {
+						Set Id = ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Value)
+						Set Frequency = ##class(%iKnow.Queries.EntityAPI).GetFrequency(DomainId, Id)
+						Set Sort=" "_$J(99999999-Frequency,8)_$ZCVT(Value,"U")
+						Set ^iKnow.SetAnalysisTemp(resultPtr,"S",Sort,Id)=$ListBuild(Value_" [ "_Frequency_" ]")
+					} elseif colValueType = "ENTITYID" {
+						Set Id = Value
+						Set Value = ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+						Set Frequency = ##class(%iKnow.Queries.EntityAPI).GetFrequency(DomainId, Id)
+						Set Sort=" "_$J(99999999-Frequency,8)_$ZCVT(Value,"U")
+						Set ^iKnow.SetAnalysisTemp(resultPtr,"S",Sort,Id)=$ListBuild(Value_" [ "_Frequency_" ]")
+					} else {
+						Set Id = objResult.%GetData(colId)
+						Set Sort = 1
+						If '$Data(^iKnow.SetAnalysisTemp(resultPtr,"S",1,Id)) Set resultEnt=resultEnt+1
+						Set ^iKnow.SetAnalysisTemp(resultPtr,"S",Sort,Id)=$ListBuild(Value)
+						Set ^iKnow.SetAnalysisTemp(resultPtr,"I",Id)=Value
+					}
+					If Metafield'="" {
+						Set ^iKnow.SetAnalysisTemp(resultPtr,"I")="Metafield"
+						Set ^iKnow.SetAnalysisTemp(resultPtr,"I",Id,Metafield)=""
+					}
+				}
+			}
+		}
+	} Catch {
+		Set sc=$$$ERROR($$$GeneralError, $ZE)
+		Do ##class(iKnow.SetAnalysis).Log("SQL statement result Error : "_$ZE)
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr:%String,Id:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set colValueType = $Get(^iKnow.SetAnalysisTemp(resultPtr))
+	If (colValueType = "ENTITY")!(colValueType = "ENTITYID") {
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		Set Value = ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+	} else {
+		Set Value = $S(Id="":"",resultPtr="":Id,1:$Get(^iKnow.SetAnalysisTemp(resultPtr,"I",Id),Id))
+	}
+	Quit Value
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set colValueType = "NULL"
+	If resultPtr'="" Set resultPtr=$Get(^iKnow.SetAnalysisTemp(resultPtr))
+	If (colValueType = "ENTITY")!(colValueType = "ENTITYID")!(colValueType="xNULL") {
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		Set Id = ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Value)
+	} else {
+		Set Id = $S(Value="":"",resultPtr="":Value,1:$Get(^iKnow.SetAnalysisTemp(resultPtr,"I",Value),Value)) ;TODO : ???
+	}
+	quit Id
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	#Dim colValueType as %String
+	#Dim DomainId as %Integer
+	#Dim fieldId as %String
+	#Dim Value, entList, OnlyMembers, id, result as %String
+	#Dim sc as %Status	
+	Set colValueType = $Get(^iKnow.SetAnalysisTemp(resultPtr))
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		If (colValueType="NULL")!(colValueType="") {
+			;concepts in iFind <> concepts in iKnow
+			;iKnow removes ' (and other) characters to normalize
+			;TODO : better : do not use iKnow api's for values from iFind, but use iFind sql
+			set entList=$lb($tr(id,"'",""))
+			Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntities(.result, DomainId, entList, 0)
+		} else {
+			Set entList=$lb(id)
+			Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.result, DomainId, entList, 0)
+		}
+		Merge OnlyMembers=^iKnow.SetAnalysisTemp(resultPtr,"I",id)
+		Do ..StoreMetaValues("ENTITY",ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.result,.OnlyMembers)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

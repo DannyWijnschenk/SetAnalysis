@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.Sentence">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63407,60722.750638</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>10</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>5</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>Sentence</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[Returns the sentences that contain literal from input and filtered by all sources from patients in the filter set.<br>Enter a literal AND an existing Set.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Literal</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>type at least a character</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Filter</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>70</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>SENTENCE</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set sc=$$$OK
+	&sql(Select iKnowMetafield into :fieldName from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	If InputSet="" Quit 0
+	Set SourceList=""
+	Set Member=""
+	Kill ^||Temp
+	For  {
+		Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
+		Set Member=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "P", Member)) If Member="" Quit
+		Kill Sources
+		If 1 {  // look in all sources from member
+			Set objFilter=##class(%iKnow.Filters.SimpleMetadataFilter).%New(DomainId,fieldName,"=",Member)
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.resultSources,DomainId,0,,objFilter)
+			Set iSrc="" For {
+				Set iSrc=$Order(resultSources(iSrc)) If iSrc="" Quit
+				Set srcId=$List(resultSources(iSrc),1)
+				Set Sources(srcId)=""
+			} 
+		} else {  // only look in sources found in filter set
+			Set srcId=""
+			For {
+				Set srcId=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "P", Member, srcId)) If srcId="" Quit
+				Set Sources(srcId)=""
+			}
+		}
+		Set srcId=""
+		For {
+			Set srcId=$Order(Sources(srcId)) If srcId="" Quit
+			Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.resultSent, DomainId, srcId, 0)
+			Set iSent="" For {
+				Set iSent=$Order(resultSent(iSent)) If iSent="" Quit
+				Set SentId=$List(resultSent(iSent),1)
+				set Sentence = ##class(%iKnow.Queries.SentenceAPI).GetValue(DomainId, SentId)
+				If $ZCVT(Sentence,"l") [ $zcvt(Input,"l") {
+					Set ^||Temp(SentId)=Sentence
+				}
+			}
+			
+		}
+	}
+
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Set SentenceId="" For {
+		Set SentenceId=$Order(^||Temp(SentenceId),1,Data) If SentenceId="" Quit
+		Set sort=1  ;" "_$J(99999999-$list(data,3),8)_$ZCVT($list(data,2),"U")
+		Set Sentence=Data
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,SentenceId)=$ListBuild(Sentence)
+		Set resultEnt=resultEnt+1
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.SentenceAPI).GetValue(DomainId, Id)
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit "" ;??? based on a string we can not get the id of the sentence
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+	set result=0
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		Set srcId = ##class(%iKnow.Queries.SentenceAPI).GetSourceId(DomainId, id)
+
+		Set fldValue = ..GetMetafieldValue(DomainId, srcId, fieldId, fieldName, fieldMethod)
+		If fldValue'="" {
+			;Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"M",fldValue,$List(entityList,1))=""
+			Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"P",fldValue,srcId)=""
+			Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"P",fldValue,srcId,id)=""
+		}
+		Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"SRC",srcId)=""
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

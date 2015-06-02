@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisDetail.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysisHighlight.css" />
+<head>
+
+<title>	Detailed information </title>
+
+</head>
+
+<script language="javascript">
+
+// Toggle display metadata fields
+function entityToggle() {
+  var display = document.getElementById("entityText");
+  var block = document.getElementById("entityBlock");
+  if (block.style.display == "block") {
+  	block.style.display = "none";
+	display.innerHTML = "show";
+ 	}
+  else {
+	block.style.display = "block";
+	display.innerHTML = "hide";
+  }
+}
+
+function toggle(displayId, blockId, extraText) {
+  var display = document.getElementById(displayId);
+  var block = document.getElementById(blockId);
+  if (block.style.display == "block") {
+  	block.style.display = "none";
+	display.innerHTML = "show";
+ 	}
+  else {
+	block.style.display = "block";
+	display.innerHTML =  "hide";
+  }
+}
+
+</script>
+
+<body>
+
+<script language="cache" runat="server">
+  #Include iKnowSetAnalysisIncludes
+  Set (objDomain, metadataField)=""
+  Set projectName=$Get(%session.Data("projectName"))
+  If projectName'="" {
+	  &sql(Select Id, iKnowDomain, iKnowMetafield, Resource into :projectId, :domainName, :metadataField, :resource From iKnow_SetAnalysis.Projects Where Name = :projectName)
+	  If SQLCODE=0 {
+		  Set objDomain=##class(%iKnow.Domain).Open(domainName)
+		  If objDomain'="" {
+		  	Set domainId=objDomain.Id
+		  } else {
+			  Set domainId=""
+		  }
+	  }
+  }
+  If (objDomain="")!(metadataField="") {
+	  Write "<h1>timeout : please login again in SetAnalysis to get to this page</h1>",!
+  } else {
+	  Set Set=$Get(%request.Data("set",1))
+	  Set metavalue=$Get(%request.Data("metavalue",1))
+	  Set action = $Get(%request.Data("action",1))
+	  Set AllSources=0
+	  If action = "remove" {
+	  	Do ##class(iKnow.SetAnalysis).RemoveMemberFromSet(projectId, Set, metavalue)
+	  } elseif action = "restore" {
+	  	Do ##class(iKnow.SetAnalysis).RestoreMemberToSet(projectId, Set, metavalue)
+	  } elseif action = "allsources" {
+	  	Set AllSources=1
+	  } elseif action = "removesent" {
+	    Set sentId=$Get(%request.Data("sent",1))
+	    Set srcId=$Get(%request.Data("src",1))
+	  	Do ##class(iKnow.SetAnalysis).RemoveSentenceFromSet(projectId, Set, sentId, srcId)
+	  }
+	  Do ##class(iKnow.SetAnalysis).OutputMetaDetail(projectId, Set, metavalue, AllSources)
+  }  
+
+</script>
+
+
+</body>
+</html>
+]]></CSP>
+</Export>

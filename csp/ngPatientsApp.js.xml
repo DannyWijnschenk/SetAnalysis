@@ -1,0 +1,472 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngPatientsApp.js" application="/csp/setanalysis/" default="1"><![CDATA[
+//Define angular modules for our app
+var PatientsApp = angular.module('PatientsApp', ['ngResource']);
+var PatientApp = angular.module('PatientApp', ['ngResource', 'angularTreeview', 'ui.bootstrap']);
+
+var MainApp = angular.module('MainApp',
+    [
+       'PatientsApp',
+       'PatientApp',
+       'ngRoute'
+    ]
+);
+ 
+MainApp
+  .config(
+    ['$routeProvider',
+      function($routeProvider,$locationProvider,$route) {
+        $routeProvider
+          .when('/Patients', {
+            templateUrl: 'ngPatients.csp',
+            action: 'PatientsApp.PatientsController'
+          })
+          .when('/Patient/:PatientId', {
+            templateUrl: 'ngPatient.csp#home',
+            action: 'PatientApp.PatientController'
+          })
+          .otherwise( {
+            redirectTo: '/Patients'
+          });
+      }
+     ]
+  );
+
+ 
+ MainApp.controller('MainController', function($scope, $route, $routeParams, $location) {
+     $scope.$route = $route;
+     $scope.$location = $location;
+     $scope.$routeParams = $routeParams;
+ });
+
+
+ HostURL = function() {
+	var path = location.pathname;  //e.g. /csp/setanalysis/page.csp
+	var pathArray = path.split('/');
+	pathArray.splice(pathArray.length-1,1);
+	var cspPath = pathArray.join('/');
+	//console.log(cspPath);
+    return "http://"+document.domain+"\\:"+location.port+cspPath+"/"
+    };
+
+ 
+
+/*
+    **************************************************************************************
+    ****   Module Patients : search/list patients                                      ***
+    **************************************************************************************
+*/
+
+ PatientsApp
+   .factory('restPatients', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patients", {}, {
+		query: { method: "GET", isArray: true },
+		update:{method: 'POST'}
+		});
+   }); //PatientsApp.factory 'restPatients'
+   
+ PatientsApp.controller('PatientsController', ['$scope', '$resource', 'restPatients', function($scope,$resource,restPatients) {
+    $scope.patientsData = restPatients.query(function(data) {
+    }); //scope.patientsData
+  
+    $scope.sortField = undefined;
+    $scope.reverse = false;
+  
+    $scope.sort = function (fieldName) {
+	  if ($scope.sortField === fieldName) {
+	    $scope.reverse = !$scope.reverse;
+	  } else {
+	    $scope.sortField = fieldName;
+	    $scope.reverse = false;
+	  }
+    };
+  
+    $scope.isSortUp = function (fieldName) {
+	  return $scope.sortField === fieldName && !$scope.reverse;
+    };
+         
+    $scope.isSortDown = function (fieldName) {
+	  return $scope.sortField === fieldName && $scope.reverse;
+    };
+
+  }]); //app.controller 'patientsController'
+  
+/*
+    **************************************************************************************
+    ****   Module Patient : View a patient                                            ***
+    **************************************************************************************
+*/
+
+
+ PatientApp.factory('restPatientDetails', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid", {}, {
+		query: { method: "GET", isArray: false }
+		});
+		
+   }); //app.factory 'restPatientDetails'
+
+ PatientApp.factory('restPatientSets', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/sets", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientSets'
+
+ PatientApp.factory('restPatientConcepts', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/concepts?Dict=:dict&Negation=:negation&Top=:top&Score=:score", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientConcepts'
+
+ PatientApp.factory('restPatientSimilar', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/similar/:entity", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientSimilar'
+
+ PatientApp.factory('restPatientRelated', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/related/:entity", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientRelated'
+
+ PatientApp.factory('restPatientNegated', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/negated/:entity", {}, {
+		query: { method: "GET", isArray: false }
+		});
+   }); //app.factory 'restPatientNegated'
+
+ PatientApp.factory('restPatientMatches', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/matches/:entity?Dict=:dict", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientMatches'
+   
+ PatientApp.factory('restPatientAllSources', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/sources", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientAllSources'
+
+ PatientApp.factory('restPatientSources', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patient/:patientid/sources/:entity", {}, {
+		query: { method: "GET", isArray: true }
+		});
+   }); //app.factory 'restPatientSources'
+
+ PatientApp.factory('restHighlight', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/sentence/:sentenceid", {}, {
+		query: { method: "GET", isArray: false }
+		});		
+   }); //app.factory 'restHightlight'
+
+ PatientApp.factory('restSource', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/source/:sourceid", {}, {
+		query: { method: "GET", isArray: false }
+		});		
+   }); //app.factory 'restSource'
+
+ PatientApp.factory('restDictionary', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/dictionary/:entity", {}, {
+		update:{method: 'POST'}
+		});
+   }); //PatientApp.factory 'restDictionary'
+
+ PatientApp.factory('restDictionaries', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/dictionaries", {}, {
+		update:{method: 'POST'}
+		});
+   }); //PatientApp.factory 'restDictionaries'
+
+ PatientApp.factory('restBlacklist', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/blacklist", {}, {
+		update:{method: 'POST'}
+		});
+   }); //PatientApp.factory 'restBlacklist'
+
+ PatientApp.factory('restTag', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patienttag", {}, {
+		update:{method: 'POST'}
+		});
+   }); //PatientApp.factory 'restTag'
+
+ PatientApp.factory('restDeleteTag', function ($resource) {
+    return $resource(
+		HostURL() + "patients/api/1.1/patientdeletetag", {}, {
+		update:{method: 'POST'}
+		});
+   }); //PatientApp.factory 'restDeleteTag'
+
+ PatientApp.controller('PatientController', ['$scope', '$resource', '$routeParams', '$modal', 'restPatientDetails', 'restPatientSets', '$sce', 'restHighlight', 'restPatientConcepts', 'restPatientSimilar', 'restPatientRelated', 'restPatientSources', 'restDictionary', 'restBlacklist', 'restPatientAllSources', 'restDictionaries', 'restSource', 'restTag', 'restDeleteTag', 'restPatientNegated', 'restPatientMatches',
+                                    function($scope,    $resource,   $routeParams,   $modal,   restPatientDetails,   restPatientSets,   $sce,   restHighlight,   restPatientConcepts,   restPatientSimilar,   restPatientRelated,   restPatientSources,   restDictionary,   restBlacklist, restPatientAllSources,     restDictionaries,   restSource,   restTag,   restDeleteTag,   restPatientNegated,   restPatientMatches) {
+   $scope.PanelVisible = false;
+   $scope.expandSources = false;
+   $scope.patientDetail = true;
+   $scope.PatientId = $routeParams.PatientId;
+   $scope.matchScore = 75;
+ 
+   $scope.getPatientDetail = function() {
+     $scope.PatientData = restPatientDetails.query({patientid:$scope.PatientId},function(data) {
+        $scope.tags = $scope.PatientData.Tags
+      });
+   };
+
+ 
+   $scope.getPatientDetail();
+   
+   $scope.getConcepts = function() {
+     $scope.Concepts = restPatientConcepts.query({patientid:$scope.PatientId, dictionary:$scope.Dictionary, negation:0, top:50, score:$scope.matchScore},function(data) {
+        temp = restPatientConcepts.query({patientid:$scope.PatientId, dict:$scope.Dictionary, negation:1, top:500, score:$scope.matchScore },function(data) {
+        $scope.Concepts = temp; 
+        });
+      });
+   }
+
+   $scope.getConcepts();
+   
+   $scope.roleList = restPatientSets.query({patientid:$scope.PatientId},function(data) {
+    });
+   $scope.dictionaries = restDictionaries.query(function(data) {
+    });
+    
+   $scope.AllSources = restPatientAllSources.query({patientid:$scope.PatientId}, function(data) {   
+   });
+   
+   $scope.sortFieldC = undefined;
+   $scope.reverseC = false;
+  
+   $scope.sortC = function (fieldName) {
+	  if ($scope.sortFieldC === fieldName) {
+	    $scope.reverseC = !$scope.reverseC;
+	  } else {
+	    $scope.sortFieldC = fieldName;
+	    $scope.reverseC = false;
+	  }
+    };
+  
+    $scope.isSortUpC = function (fieldName) {
+	  return $scope.sortFieldC === fieldName && !$scope.reverseC;
+    };
+         
+    $scope.isSortDownC = function (fieldName) {
+	  return $scope.sortFieldC === fieldName && $scope.reverseC;
+    };
+   
+   $scope.$watch(function(scope) {return scope.currentNode},
+                 function( newValue, oldValue ) {
+                   if (angular.isObject(newValue)) {
+	                   //get newValue.roleId, if this is a sentence, call Highlighter and set $scope.Highlight
+	                   if (newValue.roleId.substr(0,7)=='roleSe:') {
+		                   var sentenceid = newValue.roleId.substr(7,999)
+		                   var html = restHighlight.query({sentenceid:sentenceid},function(data) {
+			                   $scope.HighlightSentence=$sce.trustAsHtml(html.Sentence);
+			                   $scope.HighlightSource=$sce.trustAsHtml(html.Source);
+			                   $scope.PanelVisible = true;
+		                   });
+	                   }
+	                   if (newValue.roleId.substr(0,6)=='roleS:') {
+		                   var setid = newValue.roleId.substr(6,999)
+		                   var html = restHighlight.query({sentenceid:sentenceid},function(data) {
+			                   $scope.HighlightSentence=$sce.trustAsHtml(html.Sentence);
+			                   $scope.HighlightSource=$sce.trustAsHtml(html.Source);
+			                   $scope.PanelVisible = true;
+		                   });
+	                   }
+
+                   }
+                 });
+
+   
+   $scope.getSimRel = function (concept, index) {
+     $scope.Similar = restPatientSimilar.query({patientid:$scope.PatientId, entity:concept.Entity},function(data) {
+     });
+	 $scope.getRel(concept, index, 'Concepts');
+   };
+
+   $scope.getRel = function (concept, index, type) {
+     $scope.Related = restPatientRelated.query({patientid:$scope.PatientId, entity:concept.Entity},function(data) {
+     });
+     $scope.Sources = restPatientSources.query({patientid:$scope.PatientId, entity:concept.Entity},function(data) {
+     });
+     $scope.Negated = restPatientNegated.query({patientid:$scope.PatientId, entity:concept.Entity},function(data) {
+       console.log(index);
+	   if (type == 'Concepts') {
+       		$scope.Concepts[index].Negated = $scope.Negated.Negation;
+	   } else {
+       		$scope.Similar[index].Negated = $scope.Negated.Negation;
+	   }
+       console.log($scope.Negated);
+     });
+     $scope.getMatches(concept);
+   };
+
+   $scope.getMatches = function (concept) {
+  	 var listdict = ',';
+ 	 for (index = 0; index < $scope.dictionaries.length; ++index) {
+       if ($scope.dictionaries[index].Checked) {
+       		listdict = listdict + $scope.dictionaries[index].Name + ',';
+       }
+ 	 };
+    $scope.Matches = restPatientMatches.query({patientid:$scope.PatientId, entity:concept.Entity, dict:listdict},function(data) {
+     });
+   };
+
+  $scope.isConceptNegated = function(conceptNegated) {   
+    return (conceptNegated == 2)
+  };
+  $scope.isSomeConceptNegated = function(conceptNegated) {   
+    return (conceptNegated == 1)
+  };
+  
+  $scope.checkedDictionary = function() {
+    console.log("checked?");
+ 	var checked = false;
+ 	 for (index = 0; index < $scope.dictionaries.length; ++index) {
+       if ($scope.dictionaries[index].Checked) {
+       		checked = true;
+       }
+ 	 }
+ 	return checked
+  };
+  
+  $scope.RefreshConcepts = function() {
+ 	 var listdict = ',';
+ 	 for (index = 0; index < $scope.dictionaries.length; ++index) {
+       if ($scope.dictionaries[index].Checked) {
+       		listdict = listdict + $scope.dictionaries[index].Name + ',';
+       }
+ 	 }
+	 console.log(listdict); 
+
+   $scope.Concepts = restPatientConcepts.query({patientid:$scope.PatientId, dict:listdict, negation:0, score:$scope.matchScore},function(data) {
+      temp = restPatientConcepts.query({patientid:$scope.PatientId, dict:listdict, negation:1, score:$scope.matchScore },function(data) {
+      $scope.Concepts = temp; 
+      }); 
+    }); 
+  };
+  
+  $scope.RefreshSimilarConcepts = function() {
+     $scope.Similar = restPatientSimilar.query({patientid:$scope.PatientId, entity:$scope.FindConcept},function(data) {
+     });
+  };
+  
+  $scope.toDictionary = function(myEntity, index) {
+    restDictionary.update({entity:myEntity, type:'insert'});
+    //$scope.Concepts.splice(index,1);
+    $scope.Concepts[index].Selection=1;
+  };
+
+  $scope.fromDictionary = function(myEntity, index) {
+    restDictionary.update({entity:myEntity, type:'delete'});
+    $scope.Concepts.splice(index,1);
+  };
+ 
+  $scope.isDictionary = function() {
+ 	 var isDict = false;
+ 	 for (index = 0; index < $scope.dictionaries.length; ++index) {
+       if ($scope.dictionaries[index].Checked) {
+       		isDict = true;
+       		break;
+       }
+ 	 }
+ 	return isDict
+  };
+  
+  $scope.toBlacklist = function(myEntity, index) {
+    //console.log(myEntity);
+    restBlacklist.update({entity:myEntity});
+    $scope.Concepts.splice(index,1);
+  };
+
+  $scope.toggleExpandPatientDetail = function() {
+    $scope.patientDetail = !$scope.patientDetail;
+  };
+  
+  $scope.showPatientDetail = function() {
+    return $scope.patientDetail;
+  };
+  
+  $scope.showSourcesNormal = function() {
+  	return !$scope.expandSources
+  };
+  $scope.toggleExpandSources = function() {
+  	$scope.expandSources = !$scope.expandSources;
+  };
+  
+  $scope.inSelection = function(selection) {
+  	return (selection==1)
+  };
+
+  $scope.showSource = function(sourceid) {  
+     temp = restSource.query({sourceid:sourceid},function(data) {
+     $scope.HighlightSource = $sce.trustAsHtml(temp.Source);
+     });
+  };
+
+  $scope.showModalTag = function(myEntity, index, snomedCode) {
+     $modal.open({
+            'templateUrl':'modalSaveTag.html',
+            'controller':['$scope','$modalInstance',function($scope, $modalInstance){
+                $scope.tag = {'Value' : myEntity, 'Snomed': snomedCode, 'Category' : 'Allergy', 'Categories' : ['Anamnese', 'Allergy', 'Medecin', 'Surgery', 'Treatment', 'Procedure', 'Site finding', 'Device', 'Timing' ]};
+                $scope.save=function() {
+	                $modalInstance.close($scope.tag);
+	            };
+                $scope.cancel=function() {$modalInstance.dismiss('cancel');};
+            }]
+        }).result.then(function(tag) {
+    		restTag.update({patientid:$scope.PatientId,entity:tag.Value, snomed:tag.Snomed, cat:tag.Category}, function(data) {
+      			$scope.getPatientDetail();
+    		});
+        },
+        function(msg) {});
+    };
+
+  $scope.toTags = function(myEntity, index) {
+	  $scope.showModalTag(myEntity, index, '');
+  };
+
+  $scope.toTagsSnomed = function(myEntity, index, snomedCode) {
+	  $scope.showModalTag(myEntity, index, snomedCode);
+  };
+
+  $scope.deleteTag = function(myTag, index) {
+    restDeleteTag.update({patientid:$scope.PatientId,entity:myTag}, function(data) {
+    });
+    console.log('delete tag');
+   $scope.getPatientDetail();
+  };
+
+
+  }]); //app.controller 'patientController'
+
+
+ PatientApp.controller('SafeHtmlController', ['$scope', '$sce', function($scope,$sce) {
+     $scope.SafeHtml = $sce.trustAsHtml($scope.source.Source);
+     //console.log($scope.source.Source);
+  }]);
+
+
+/* TODO : put in separate file !!!
+    angular.treeview.js
+*/
+(function(l){l.module("angularTreeview",[]).directive("treeModel",function($compile){return{restrict:"A",link:function(a,g,c){var e=c.treeModel,h=c.nodeLabel||"label",d=c.nodeChildren||"children",k='<ul><li data-ng-repeat="node in '+e+'"><i class="collapsed" data-ng-show="node.'+d+'.length && node.collapsed" data-ng-click="selectNodeHead(node, $event)"></i><i class="expanded" data-ng-show="node.'+d+'.length && !node.collapsed" data-ng-click="selectNodeHead(node, $event)"></i><i class="normal" data-ng-hide="node.'+
+d+'.length"></i> <span data-ng-class="node.selected" data-ng-click="selectNodeLabel(node, $event)">{{node.'+h+'}}</span><div data-ng-hide="node.collapsed" data-tree-model="node.'+d+'" data-node-id='+(c.nodeId||"id")+" data-node-label="+h+" data-node-children="+d+"></div></li></ul>";e&&e.length&&(c.angularTreeview?(a.$watch(e,function(m,b){g.empty().html($compile(k)(a))},!1),a.selectNodeHead=a.selectNodeHead||function(a,b){b.stopPropagation&&b.stopPropagation();b.preventDefault&&b.preventDefault();b.cancelBubble=
+!0;b.returnValue=!1;a.collapsed=!a.collapsed},a.selectNodeLabel=a.selectNodeLabel||function(c,b){b.stopPropagation&&b.stopPropagation();b.preventDefault&&b.preventDefault();b.cancelBubble=!0;b.returnValue=!1;a.currentNode&&a.currentNode.selected&&(a.currentNode.selected=void 0);c.selected="selected";a.currentNode=c}):g.html($compile(k)(a)))}}})})(angular);
+]]></CSP>
+</Export>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.SetKeyValueMembers">
+<Super>%Persistent</Super>
+<TimeCreated>62956,56486.118908</TimeCreated>
+
+<Property name="SetName">
+<Type>%String</Type>
+</Property>
+
+<Property name="Member">
+<Type>%String</Type>
+</Property>
+
+<Property name="KeyId">
+<Type>%String</Type>
+</Property>
+
+<Property name="Value">
+<Type>%String</Type>
+</Property>
+
+<Index name="idxSetName">
+<Properties>SetName</Properties>
+</Index>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetA4ECA.SetKeyValue7D0FD</DataLocation>
+<DefaultData>SetKeyValueMembersDefaultData</DefaultData>
+<IdLocation>^iKnow.SetA4ECA.SetKeyValue7D0FD</IdLocation>
+<IndexLocation>^iKnow.SetA4ECA.SetKeyValue7D0FI</IndexLocation>
+<StreamLocation>^iKnow.SetA4ECA.SetKeyValue7D0FS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetKeyValueMembersDefaultData">
+<Structure>listnode</Structure>
+<Subscript/>
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>SetId</Value>
+</Value>
+<Value name="3">
+<Value>MemberId</Value>
+</Value>
+<Value name="4">
+<Value>KeyValueId</Value>
+</Value>
+<Value name="5">
+<Value>SetName</Value>
+</Value>
+<Value name="6">
+<Value>Member</Value>
+</Value>
+<Value name="7">
+<Value>KeyId</Value>
+</Value>
+<Value name="8">
+<Value>Value</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

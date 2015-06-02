@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisAPI">
+<Description>
+This class contains API classmethods to rerieve information from sets :
+Get list of projects : .GetProjects(.Result)
+Get list of projects for patient '1234' : .GetProjects(.Result, 1234)
+Get list of sets for project 'MyProject' : .GetSetsByProject(.Result, "MyProject")
+Get list of sets for project 'MyProject' for patient '1234' : .GetSetsByProject(.Result, "MyProject", 1234)
+Get list of deepsee enabled sets for project 'MyProject' for patient '1234' : .GetSetsByProject(.Result, "MyProject", 1234, , 1)
+Get list of patients for project 'MyProject' for set 'MySet' : .GetMembersBySet(.Result, "MyProject", "MySet")
+Get list of highlighted sentences for project 'MyProject' for set 'MySet' for patient '1234' : .GetSentencesByMember(.Result, "MyProject", "MySet", 1234, 1)
+Get list of patients for project 'MyProject' : .GetMembersByProject(.Result, "MyProject")</Description>
+<IncludeCode>%occStatus</IncludeCode>
+<TimeCreated>63386,33733.22767</TimeCreated>
+
+<Method name="GetProjects">
+<Description>
+Returns a list of all projects, can be filtered by member
+Return format : result(#) = $ListBuild(ProjectId,ProjectName,ProjectDescription,DomainId)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Result:%String,Member:%String=""]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim Status as %Status
+	#dim iResult as %Integer
+	#dim Select as %Boolean
+	#dim Set as %String
+	
+	Set Status=$$$OK
+	Kill Result
+	Set ProjectId="",iResult=0
+	For  {
+		Set ProjectId=$Order(^iKnow.SetAnalysis(ProjectId)) If ProjectId="" Quit
+		Set Select=1
+		If Member'="" {  ;select only projects if this member is present in one of the sets
+			Set Set="",Select=0
+			For {
+				Set Set=$Order(^iKnow.SetAnalysis(ProjectId,Set)) If Set="" Quit
+				If $Data(^iKnow.SetAnalysis(ProjectId,Set,"P",Member)) Set Select=1 Quit
+			}
+		}
+		If Select {
+			Set iResult=iResult+1
+			&sql(Select Name,Description,iKnowDomain Into :ProjectName,:Description,:Domain From iKnow_Setanalysis.Projects Where Id = :ProjectId)
+			Set objDomain = ##class(%iKnow.Domain).Open(Domain)
+			Set DomainId=$Select(objDomain="":"",1:objDomain.Id)
+			Set Result(iResult)=$ListBuild(ProjectId,ProjectName,Description,DomainId)
+		}
+	}
+	Quit Status
+]]></Implementation>
+</Method>
+
+<Method name="GetSetsByProject">
+<Description>
+Returns a list of sets in the project, can be filtered by member, only sets enabled for REST, only sets enabled for DeepSee
+Return format : result(#) = $ListBuild(SetName, RestEnabled, DeepSeeEnabled, Description)
+Project can be the Id or the name</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Result:%String,Project:%String,Member:%String="",OnlyRestEnabled:%Boolean=0,OnlyDeepSeeEnabled:%Boolean=0]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim iResult as %Integer
+	
+	Kill Result
+	If $Get(Project)="" Quit $$$ERROR(5001,"Project can not be empty")
+	If Project'?.N {  ;see if we can resolve ProjectName -> ProjectId
+		&sql(Select Id Into :ProjectId From iKnow_Setanalysis.Projects Where Name = :Project)
+		If SQLCODE'=0 Set ProjectId=""
+	} else {
+		Set ProjectId=Project
+	}
+	If ProjectId'="" {
+		Set Set="",iResult=0
+		For {
+			Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+			If Member'="",'$Data(^iKnow.SetAnalysis(ProjectId, Set,"P",Member)) Continue
+			&sql(Select RestEnabled, DeepSeeEnabled, Description Into :RestEnabled, :DeepSeeEnabled, :Description From iKnow_SetAnalysis.Sets Where (ProjectId = :ProjectId) And (Name = :Set))
+			If SQLCODE'=0 Continue
+			If OnlyRestEnabled=1,'RestEnabled Continue
+			If OnlyDeepSeeEnabled=1,'DeepSeeEnabled Continue
+			Set iResult=iResult+1
+			Set Result(iResult)=$ListBuild(Set, RestEnabled, DeepSeeEnabled, Description)
+		}
+	}
+	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="GetEntitiesBySet">
+<Description>
+Returns a list of all entities of a set
+Return format : result(#) = $ListBuild(entity)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Result:%String,Project:%String,Set:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim Status as %Status
+	#dim iResult as %Integer
+	#dim Entity as %String
+	
+	Set Status=$$$OK
+	Kill Result
+	If $Get(Project)="" Set Status = $$$ERROR(5001,"Project can not be empty") Quit ""
+	If $Get(Set)="" Set Status = $$$ERROR(5001,"Set can not be empty") Quit ""
+	
+	If Project'?.N {  ;see if we can resolve ProjectName -> ProjectId
+		&sql(Select Id Into :ProjectId From iKnow_Setanalysis.Projects Where Name = :Project)
+		If SQLCODE'=0 Set ProjectId=""
+	} else {
+		Set ProjectId=Project
+	}
+
+	Set iResult=0
+	Set Entity=""
+	For {
+		Set Entity = $Order(^iKnow.SetAnalysis(ProjectId, Set, "E", Entity)) If Entity = "" Quit
+		Set iResult=iResult+1
+		Set Result(iResult)=$ListBuild(Entity)
+	}
+	Quit Status
+]]></Implementation>
+</Method>
+
+<Method name="GetMembersBySet">
+<Description>
+Returns a list of all members of a set
+Return format : result(#) = $ListBuild(member)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Result:%String,Project:%String,Set:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim Status as %Status
+	#dim iResult as %Integer
+	#dim Member as %String
+	
+	Set Status=$$$OK
+	Kill Result
+	If $Get(Project)="" Set Status = $$$ERROR(5001,"Project can not be empty") Quit ""
+	If $Get(Set)="" Set Status = $$$ERROR(5001,"Set can not be empty") Quit ""
+	
+	If Project'?.N {  ;see if we can resolve ProjectName -> ProjectId
+		&sql(Select Id Into :ProjectId From iKnow_Setanalysis.Projects Where Name = :Project)
+		If SQLCODE'=0 Set ProjectId=""
+	} else {
+		Set ProjectId=Project
+	}
+
+	Set iResult=0
+	Set Member=""
+	For {
+		Set Member = $Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member)) If Member = "" Quit
+		Set iResult=iResult+1
+		Set Result(iResult)=$ListBuild(Member)
+	}
+	Quit Status
+]]></Implementation>
+</Method>
+
+<Method name="GetSentencesByMember">
+<Description>
+Returns a list of all sentences for a set of a member
+Return format : result(#) = $ListBuild(sourceid, sentenceid, sentence(can be formatted))</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Result:%String,Project:%String,Set:%String,Member:%String,Highlight:%Boolean=1]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim Status as %Status
+	#dim iResult, SrcId, SentId, DomainId, iTerm as %Integer
+	#dim Terms, QuotedTerms, Sentence, domainName,schema, package as %String
+	#dim sc as %Status
+	
+	Set Status=$$$OK
+	Kill Result
+	If $Get(Project)="" Set Status = $$$ERROR(5001,"Project can not be empty") Quit ""
+	If $Get(Set)="" Set Status = $$$ERROR(5001,"Set can not be empty") Quit ""
+	If $Get(Member)="" Set Status = $$$ERROR(5001,"Member can not be empty") Quit ""
+	
+	If Project'?.N {  ;see if we can resolve ProjectName -> ProjectId
+		&sql(Select Id Into :ProjectId From iKnow_Setanalysis.Projects Where Name = :Project)
+		If SQLCODE'=0 Set ProjectId=""
+	} else {
+		Set ProjectId=Project
+	}
+
+	Set DomainId=..GetDomainIdFromProjectId(ProjectId)
+	If Highlight {
+		Set Terms=##class(iKnow.SetAnalysis).GetAllTerms(ProjectId, Set)
+	}
+
+	Set iResult=0
+	Set SrcId=""
+	For {
+		Set SrcId = $Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, SrcId)) If SrcId = "" Quit
+		Set SentId=""
+		For  {
+			Set SentId=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, SrcId, SentId)) If SentId="" Quit
+			If Highlight {
+				Set Sentence=##class(iKnow.SetAnalysis).GetSentence(DomainId, SentId, .Terms)  ;highlight neg+terms
+			} else {
+				Set Sentence=##class(%iKnow.Queries.SentenceAPI).GetHighlighted(DomainId, SentId)  ;feed no special highlight fonts
+			}
+			Set iResult=iResult+1
+			Set Result(iResult) = $ListBuild(SrcId, SentId, Sentence)
+		}
+	}
+	Quit Status
+]]></Implementation>
+</Method>
+
+<Method name="GetMembersByProject">
+<Description>
+return the list of projects for one member</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Result:%String,Project:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim Status as %Status
+	#dim Set, Member as %String
+	#dim ProjectId, iMember as %Integer
+	
+	Set Status=$$$OK
+	Kill Result
+	If $Get(Project)="" Set Status = $$$ERROR(5001,"Project can not be empty") Quit ""
+	Kill ^||SetAnalysisMembers
+	If Project'?.N {  ;see if we can resolve ProjectName -> ProjectId
+		&sql(Select Id Into :ProjectId From iKnow_Setanalysis.Projects Where Name = :Project)
+		If SQLCODE'=0 Set ProjectId=""
+	} else {
+		Set ProjectId=Project
+	}
+
+	Set Set=""
+	For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		Set Member=""
+		For  {
+			Set Member=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member)) If Member="" Quit
+			Set ^||SetAnalysisMembers(Member)=""
+		}
+	}
+
+	Set Member=""
+	For iMember=1:1 {
+		Set Member=$Order(^||SetAnalysisMembers(Member)) If Member="" Quit
+		Set Result(iMember)=$ListBuild(Member)
+	}
+]]></Implementation>
+</Method>
+
+<UDLText name="T">
+<Content><![CDATA[
+// internal API calls
+
+]]></Content>
+</UDLText>
+
+<Method name="GetSetDefinition">
+<Description>
+Project can be the Id or the name</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[Project:%String,Set:%String,&Status:%Status]]></FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If $Get(Project)="" Set Status = $$$ERROR(5001,"Project can not be empty") Quit ""
+	If $Get(Set)="" Set Status = $$$ERROR(5001,"Set can not be empty") Quit ""
+	If Project'?.N {  ;see if we can resolve ProjectName -> ProjectId
+		&sql(Select Id Into :ProjectId From iKnow_Setanalysis.Projects Where Name = :Project)
+		If SQLCODE'=0 Set ProjectId=""
+	} else {
+		Set ProjectId=Project
+	}
+	Set Status = $$$OK
+	;= $lb(Formula(bool), PluginId, "Input", "Set", DeepSeeEnabled(bool), RestEnabled(bool), Pattern, Description)
+	Quit $Get(^iKnow.SetAnalysis(ProjectId,Set,"D",1))
+]]></Implementation>
+</Method>
+
+<Method name="GetDomainIdFromProjectId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#dim objDomain as %iKnow.Domain
+	&sql(Select iKnowDomain Into :DomainName From iKnow_SetAnalysis.Projects Where Id = :ProjectId)
+	Set objDomain=##class(%iKnow.Domain).Open(DomainName)
+	If objDomain="" Quit ""
+	Quit objDomain.Id
+]]></Implementation>
+</Method>
+</Class>
+</Export>

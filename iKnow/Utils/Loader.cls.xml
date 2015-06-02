@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.Utils.Loader">
+<Description>
+Version 1.0.3 DW-20.11.2014</Description>
+<IncludeCode>%occStatus,%IKPublic</IncludeCode>
+<Super>iKnow.Utils.Log</Super>
+<TimeCreated>63504,63019.038025</TimeCreated>
+
+<Method name="LoadSQL">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName,objLister:%iKnow.Source.Lister,objLoader:%iKnow.Source.Loader,TableFields:%String,Table:%String,Where:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim MetaFields as %String = ""
+	#Dim MetaKeys as %String = ""
+	#Dim SQLQuery as %String = ""
+	#Dim iField as %Integer
+	#Dim Field, SourceId, GroupField, DataFields, Alias, Datatype, Operators as %String
+	#Dim sc as %Status
+	#Dim err as %String
+	#Dim DomainId as %Integer
+	#Dim objDomain as %iKnow.Domain
+	Set objDomain=##class(%iKnow.Domain).Open(DomainName)
+	Set DomainId = objDomain.Id
+	For iField=1:1:$Length(TableFields,",") {
+		Set Field=$Piece(TableFields,",",iField)
+		If $Piece(Field,":",2)="ID" {
+			Set SourceId = $Piece(Field,":",1)
+ 			Set GroupField = $Piece(Field,":",1)
+		} elseIf $Piece(Field,":",2)="DATA" {
+			Set DataFields = $ListBuild($Piece(Field,":",1))
+		} else {
+			Set Alias=$Select($Piece($Piece(Field,":",1)," as ",2)="":$Piece(Field,":",1),1:$Piece($Piece(Field,":",1)," as ",2))
+			If $Piece(Field,":",2)="DATE" {
+				Set Datatype=$$$MDDTDATE
+				Set Operators=$lb("=","BETWEEN")
+			} else {
+				Set Datatype=$$$MDDTSTRING
+				Set Operators=$lb("=")
+			}
+				
+			do ##class(%iKnow.Queries.MetadataAPI).AddField(DomainId,Alias,Operators,Datatype,1)
+			Set MetaFields=MetaFields_$ListBuild(Alias)  ;$Piece(Field,":",1))
+			Set MetaKeys=MetaKeys_$ListBuild(Alias)
+		}
+		Set SQLQuery = SQLQuery _ $Select(SQLQuery="":"",1:", ") _ $Piece(Field,":",1)
+	}
+	Set SQLQuery = "Select "_ SQLQuery _ " From " _ Table
+	If $Get(Where)'="" {
+		If $ZCVT(Where,"U")'?." "1"WHERE ".E Set Where = "Where "_Where
+		Set SQLQuery = SQLQuery _ " "_ Where
+	}
+
+	Set sc = objLister.AddListToBatch(SQLQuery, SourceId, GroupField, DataFields, MetaFields, MetaKeys, 0)
+	If sc '= 1 {
+		Do $SYSTEM.Status.DecomposeStatus(sc, .err)
+		Do ..Log("Load "_DomainName_" : lister failed with : "_$Get(err(1))) QUIT
+	}
+
+	Set sc = objLoader.ProcessBatch()
+	If sc '= 1 {
+		Do $SYSTEM.Status.DecomposeStatus(sc, .err)
+		Do ..Log("Load "_DomainName_" : loader failed with : "_$Get(err(1))) QUIT
+	}
+
+	Do ..Log("Load "_DomainName_" : "_##class(%iKnow.Queries.SourceAPI).GetCountByDomain(DomainId)_" sources in domain.")
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="OpenDomain">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[DomainName,Drop:%Boolean=0,&objDomain:%iKnow.Domain]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim sc as %Status = $$$OK
+	#Dim err as %String
+	If (##class(%iKnow.Domain).Exists(DomainName)) {
+		Set objDomain = ##class(%iKnow.Domain).Open(DomainName)
+		If Drop=1 {
+			Do ..Log("Load "_DomainName_" : drop data")
+			Set sc = objDomain.DropData(1,1,1)
+			If 'sc {
+				Do $SYSTEM.Status.DecomposeStatus(sc, .err)
+				Do ..Log("Load "_DomainName_" : drop failed with : "_$Get(err(1))) QUIT
+			}
+		}
+    } Else {
+    	Set objDomain = ##class(%iKnow.Domain).Create(DomainName)
+		do objDomain.SetParameter($$$IKPSTATUS,1)
+		Do objDomain.%Save()
+    }
+    Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="OpenConfig">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ConfigName,DetectLanguage,Languages,UserDict,Summarize,&objConfig:%iKnow.Configuration]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim sc as %Status
+	#Dim err as %String
+	If ##class(%iKnow.Configuration).Exists(ConfigName) {
+		Set objConfig = ##class(%iKnow.Configuration).Open(ConfigName)
+	} else {
+		Set objConfig = ##class(%iKnow.Configuration).%New(ConfigName)
+	}
+	If $Data(DetectLanguage) Set objConfig.DetectLanguage = DetectLanguage
+	If $Data(Languages) Set objConfig.Languages = Languages
+	If $Data(UserDict) Set objConfig.UserDictionary = UserDict
+	If $Data(Summarize) Set objConfig.Summarize = Summarize
+	Set sc = objConfig.%Save()
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="OpenSQLLister">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[DomainName,ConfigName,Processor:%String="%iKnow.Source.Temp.Processor",Params:%String="",Converter:%String="",&objLister:%iKnow.Source.Lister]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim sc as %Status = $$$OK
+	#Dim err as %String
+	#Dim objDomain as %iKnow.Domain = ##class(%iKnow.Domain).Open(DomainName)
+	If objDomain="" Quit ##class(%Exception.StatusException).%New(,"6000",,$LISTBUILD("Domain "_DomainName_" does not exist"))
+
+	Set objLister=##class(%iKnow.Source.SQL.Lister).%New(objDomain.Id)
+	Do objLister.Init(ConfigName, Processor, Params, Converter)
+
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="DropDomain">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName</FormalSpec>
+<Implementation><![CDATA[
+	#Dim objDomain as %iKnow.Domain
+	#Dim sc as %Status
+	#Dim err as %String
+	If (##class(%iKnow.Domain).Exists(DomainName)) {
+		Set objDomain = ##class(%iKnow.Domain).Open(DomainName)
+		Do ..Log("Drop "_DomainName_" : drop data")
+		Set sc = objDomain.DropData(1,1,1)
+		If 'sc {
+			Do $SYSTEM.Status.DecomposeStatus(sc, .err)
+			Do ..Log("Drop "_DomainName_" : drop failed with : "_$Get(err(1))) QUIT
+		}
+	}
+]]></Implementation>
+</Method>
+</Class>
+</Export>

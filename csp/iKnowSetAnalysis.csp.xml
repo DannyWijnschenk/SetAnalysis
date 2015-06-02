@@ -1,0 +1,1767 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysis.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+<csp:comment>
+Project : SetAnalysis
+Version : V. 2.0.11 15/12/2014
+Author  : Danny Wijnschenk - SE - InterSystems Benelux
+Contact : danny.wijnschenk@intersystems.com 
+Goal    : Demo to show how you can do research on unstructured text. This demo lets you define sets (cohorts)
+          that combine items with common characteristics.
+
+          URL : http://<host>:<port>/csp/<namespace>/iKnowSetAnalysis.csp?project=<Project>
+          where : <host> : ip-adress of webserver (e.g. localhost)
+                  <port> : csp webserver port (e.g. 57772)
+                  <namespace> : Caché namespace
+                  <project> : SetAnalysis project or ommit <project> to create one
+Scenario : Suppose you want to create sets of patients that take the same medicine, e.g. Perdolan and Ibuprofen
+           When you get the list of similar concepts for 'Perdolan', you can select the similar concepts from a list, and
+           save the set giving a name.
+           You will see the list of saved sets on the right hand side, where you will also see the items that
+           are uniquely defined in the set. (e.g. all patientsId's from the documents that have one of the similar concepts)
+           You can also create a set by using a formula : if you have two sets named 'UsePerdolan' and 'UseIbuprofen',
+           you can create a third one with the formula 'UsePerdolan and UseIbuprofen'.
+           
+ The SetAnalysis kit includes following files :
+ * iKnowSetAnalysis.csp         : starting csp page for creating sets of entities that allows you to make
+                                  cohorts that have similar characteristics. (e.g. patients)
+ * iKnowSetAnalysisDetail.csp   : detail csp page to view details of a set (sentences, sources)
+ * iKnowSetAnalysisExport.csp   : used to export data to .csv file (browser will call excell automatically)
+ * iKnow.SetAnalysis.cls        : helper class which contains all class methods used by the csp pages
+ * iKnow.SetAnalysis.*.cls      : persistent classes to store the Sets (work in progress)
+ * iKnow.SetAnalysisPlugin.cls  : helper class containing the scripts you can use to select entities
+ * iKnowSetAnalysis.css, jquery-gentleSelect.css, jquery-gentleSelect.js,jquery.min.js
+ * minus.gif, plus.gif, refresh.gif, excel.gif
+ Optional files :
+ * iKnowPatients.csp            : csp page which will show details per metafield (e.g. patients) in stead of per set
+ * Load.csp                     : csp page to load additional sources in iKnow (UI will call Load.Batch.All, which you need to implement yourself for your particular domain)
+
+ If you write your own iKnow loader, you need to make following call after the full or update load is finished,
+ to enable to update your sets that were defined earlier :
+ 
+ Do ##class(iKnow.SetAnalysis).UpdateAllSets(ProjectId)
+
+ To Debug : Do ##class(iKnow.SetAnalysis).Debug(1)
+            to stop debug info : Do ##class(iKnow.SetAnalysis).Debug(0)
+</csp:comment>
+
+<title>SetAnalysis:#(%session.Get("projectName"))#</title>
+
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+<link rel="icon" href="favicon.ico" />
+<!--- resources for gentleSelect (listbox plugins) -->
+<link type="text/css" href="jquery-gentleSelect.css" rel="stylesheet" />
+<script type="text/javascript" src="jquery.min.js"></script>
+<script type="text/javascript" src="jquery-gentleSelect.js"></script>
+
+<!--- resources for splitter -->
+<link type="text/css" href="splitter/splitter.css" rel="stylesheet" />
+<script type="text/javascript" src="splitter/jquery.cookie.js"></script>
+<script type="text/javascript" src="splitter/splitter-152.js"></script>
+
+  <script type="text/javascript">
+    $(document).ready(function() {
+        $('#actionList').gentleSelect({ 
+            columns: 1,
+            itemWidth: 100,
+            title: "Select a plugin",
+	    hideOnMouseOut: true
+        });
+	   makeSplitter();
+    });
+
+function makeSplitter()
+{
+	$("#DockSplitter").splitter({
+		type: "v",
+		outline: true,
+		sizeLeft: 150,
+		minLeft: 100,
+		minRight: 100,
+		resizeToWidth: true,
+		dock: "right",
+		dockSpeed: 200,
+		cookie: "docksplitter",
+		dockKey: 'Z',	// Alt-Shift-Z in FF/IE
+		accessKey: 'I'	// Alt-Shift-I in FF/IE
+	});
+}
+</script>
+
+
+</head>
+ <script language="Cache" method="Debug" arguments="Label:%String,Var:%String">
+	If '##class(iKnow.SetAnalysis).Debug() Quit
+	Write "Debug> ",Label," : ",Var
+	Write "<br>"
+</script>
+
+<script language="cache" runat="server">
+	write "<script language=""javascript"">",!
+	write "  function SetInput(Type) {",!
+	write "    var inputtext = document.getElementById(""showinputtext"");",!
+	write "    var inputset  = document.getElementById(""showinputset"");",!
+	write "	   var inputarea = document.getElementById(""showinputarea"");",!
+	write "	   var inputlabel = document.getElementById(""showinputlabel"");",!
+	write "	   var setlabel = document.getElementById(""showsetlabel"");",!
+	write "    var concepttext = document.getElementById(""concepttext"");",!
+	write "    var conceptarea = document.getElementById(""conceptarea"");",!
+	write "	   var inputpatternlabel = document.getElementById(""showinputpatternlabel"");",!
+	write "	   var inputpattern = document.getElementById(""showinputpattern"");",!
+	write "    var executebutton = document.getElementById(""showexecutebatch"");",!
+	write "    var savesetsection = document.getElementById(""savesetsection"");",!
+	write "    var saverulesection = document.getElementById(""saverulesection"");",!
+	write "    var selectelementssection = document.getElementById(""selectelementssection"");",!
+
+	//      1    2     3           4          5           6         7          8        9             10            11                12     13
+	//Data:Id, Name, InputLabel, InputSize, iKnowDomain, InputSet, SetLabel, Metafield,Description, InputPattern, InputPlaceholder, Order, DisableManualSelection"
+	Do ##class(iKnow.SetAnalysisPlugin).GetActions(.ActionList)
+	Set iAction="" For {
+	  Set iAction=$order(ActionList(iAction),1,Data) If iAction="" Quit
+	  write "    if (Type == """,$List(Data,2),""") {",!
+	  If $List(Data,4)="AREA" {  //InputSize = numeric or AREA
+		  write "      inputarea.style.display = ""block"";",!
+		  write "      inputtext.style.display = ""none"";",!
+		  write "      conceptarea.placeholder = """,$List(Data,11),""";",!
+		  write "      concepttext.value = """";",!
+	  } else {
+		  write "      inputarea.style.display = ""none"";",!
+		  write "      document.getElementById(""conceptarea"").value = """";",!
+		  write "      inputtext.style.display = ""block"";",!
+		  write "      concepttext.size = ",$List(Data,4),";",!
+		  write "      concepttext.placeholder = """,$List(Data,11),""";",!
+	  }
+	  If $List(Data,3)'="" {    //InputLabel
+		  write "      inputlabel.style.display = ""block"";",!
+		  write "      inputlabel.innerHTML = """,$list(Data,3),""";",!
+	  } else {
+		  write "      inputlabel.style.display = ""none"";",!
+	  }
+	  If $List(Data,6)=1 {    //InputSet
+		  write "      inputset.style.display = ""block"";",!
+	  } else {
+		  write "      inputset.style.display = ""none"";",!
+		  write "      document.getElementById(""inputset"").value = """";",!
+	  }
+	  If $List(Data,7)'="" {   //SetLabel
+		  write "      setlabel.style.display = ""block"";",!
+		  write "      setlabel.innerHTML = """,$list(Data,7),""";",!
+	  } else {
+		  write "      setlabel.style.display = ""none"";",!
+	  }
+	  If $List(Data,10)=1 {   //InputPattern
+		  write "      inputpatternlabel.style.display = ""block"";",!
+		  write "      inputpattern.style.display = ""block"";",!
+		  ;write "      inputpattern.innerHTML = """,$list(Data,7),""";",!
+	  } else {
+		  write "      inputpatternlabel.style.display = ""none"";",!
+		  write "      inputpattern.style.display = ""none"";",!
+		  write "      inputpattern.selected = -1;"  ;todo: check
+	  }
+	  If $List(Data,13)=1 {   //TODO = 1 to hide execute & batch buttons
+	      write "      executebutton.style.display = ""none"";",!
+	      write "      savesetsection.style.display = ""block"";",!
+	      write "      saverulesection.style.display = ""none"";",!  ;;for the moment no rules !
+	      write "      selectelementssection.style.display = ""none"";",!
+
+	  } else {
+	      write "      executebutton.style.display = ""block"";",!
+	      write "      savesetsection.style.display = ""none"";",!
+	      write "      saverulesection.style.display = ""none"";",!
+	      write "      selectelementssection.style.display = ""none"";",!
+	  }
+	  
+	  write "	document.getElementById(""showhelp"").innerHTML = """,$list(Data,9)_"<br><br>",""";",!
+	  write "}",!
+	  }
+
+	write "}",!
+	write "<","/script>",!
+</script>
+	
+
+<script language="javascript">
+	// Popup window function
+	function Popup(url) {
+		popupWindow = window.open(url,'DetailSetAnalysis','height=500,width=700,left=100,top=100,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,directories=no, status=no');
+	}
+
+	// Toggle display metadata fields
+	function filterToggle() {
+		var display = document.getElementById("filterText");
+		var block = document.getElementById("filterBlock");
+		if (block.style.display == "block") {
+    		block.style.display = "none";
+			display.innerHTML = "show filters";
+	  	}
+		else {
+			block.style.display = "block";
+			display.innerHTML = "hide filters";
+		}
+	}
+
+	function ShowView(element) {
+		var theElement = document.getElementById(element);
+		theElement.style.display="block";
+		if (element=="viewDetail") {
+			document.getElementById("viewOverview").style.display="none";
+			document.getElementById("viewTree").style.display="none";
+		}
+		else if (element=="viewOverview") {
+			document.getElementById("viewDetail").style.display="none";
+			document.getElementById("viewTree").style.display="none";
+		}
+		else if (element=="viewTree") {
+			document.getElementById("viewDetail").style.display="none";
+			document.getElementById("viewOverview").style.display="none";
+		}
+	}
+	
+	function TabToggle(Tab) {
+		var tab1 = document.getElementById("filterBlock");
+		var tab2 = document.getElementById("pluginBlock");
+		var tab3 = document.getElementById("formulaBlock");
+		var tab4 = document.getElementById("toolsBlock");
+		var tab6 = document.getElementById("projectBlock");
+		if (Tab == "filter") {
+    		tab1.style.display = "block";
+    		tab1.class = "selected";
+    		document.getElementById("tab1").setAttribute("class", "selected");
+    		tab2.style.display = "none";
+    		document.getElementById("tab2").setAttribute("class", "notselected");
+    		tab3.style.display = "none";
+    		document.getElementById("tab3").setAttribute("class", "notselected");
+    		tab4.style.display = "none";
+    		document.getElementById("tab4").setAttribute("class", "notselected");
+    		tab6.style.display = "none";
+    		document.getElementById("tab6").setAttribute("class", "notselected");
+	  	}
+		if (Tab == "plugin") {
+    		tab1.style.display = "none";
+    		document.getElementById("tab1").setAttribute("class", "notselected");
+    		tab2.style.display = "block";
+    		document.getElementById("tab2").setAttribute("class", "selected");
+    		tab3.style.display = "none";
+    		document.getElementById("tab3").setAttribute("class", "notselected");
+    		tab4.style.display = "none";
+    		document.getElementById("tab4").setAttribute("class", "notselected");
+    		tab6.style.display = "none";
+    		document.getElementById("tab6").setAttribute("class", "notselected");
+	  	}
+		if (Tab == "formula") {
+    		tab1.style.display = "none";
+    		document.getElementById("tab1").setAttribute("class", "notselected");
+    		tab2.style.display = "none";
+    		document.getElementById("tab2").setAttribute("class", "notselected");
+    		tab3.style.display = "block";
+    		document.getElementById("tab3").setAttribute("class", "selected");
+    		tab4.style.display = "none";
+    		document.getElementById("tab4").setAttribute("class", "notselected");
+    		tab6.style.display = "none";
+    		document.getElementById("tab6").setAttribute("class", "notselected");
+	  	}
+		if (Tab == "tools") {
+    		tab1.style.display = "none";
+    		document.getElementById("tab1").setAttribute("class", "notselected");
+    		tab2.style.display = "none";
+    		document.getElementById("tab2").setAttribute("class", "notselected");
+    		tab3.style.display = "none";
+    		document.getElementById("tab3").setAttribute("class", "notselected");
+    		tab4.style.display = "block";
+    		document.getElementById("tab4").setAttribute("class", "selected");
+    		tab6.style.display = "none";
+    		document.getElementById("tab6").setAttribute("class", "notselected");
+	  	}
+
+		if (Tab == "project") {
+    		tab1.style.display = "none";
+    		document.getElementById("tab1").setAttribute("class", "notselected");
+    		tab2.style.display = "none";
+    		document.getElementById("tab2").setAttribute("class", "notselected");
+    		tab3.style.display = "none";
+    		document.getElementById("tab3").setAttribute("class", "notselected");
+    		tab4.style.display = "none";
+    		document.getElementById("tab4").setAttribute("class", "notselected");
+    		tab6.style.display = "block";
+    		document.getElementById("tab6").setAttribute("class", "selected");
+	  	}
+
+		if (Tab == "detail") {
+    		document.getElementById("tab10").setAttribute("class", "selected");
+    		document.getElementById("tab11").setAttribute("class", "notselected");
+    		document.getElementById("tab12").setAttribute("class", "notselected");
+    		document.getElementById("tab13").setAttribute("class", "notselected");
+  	  	}
+		if (Tab == "overview") {
+    		document.getElementById("tab10").setAttribute("class", "notselected");
+    		document.getElementById("tab11").setAttribute("class", "selected");
+    		document.getElementById("tab12").setAttribute("class", "notselected");
+    		document.getElementById("tab13").setAttribute("class", "notselected");
+  	  	}
+		if (Tab == "treeview") {
+    		document.getElementById("tab10").setAttribute("class", "notselected");
+    		document.getElementById("tab11").setAttribute("class", "notselected");
+    		document.getElementById("tab12").setAttribute("class", "selected");
+    		document.getElementById("tab13").setAttribute("class", "notselected");
+  	  	}
+		if (Tab == "panellookup") {
+    		document.getElementById("tab10").setAttribute("class", "notselected");
+    		document.getElementById("tab11").setAttribute("class", "notselected");
+    		document.getElementById("tab12").setAttribute("class", "notselected");
+    		document.getElementById("tab13").setAttribute("class", "selected");
+	  	}
+	}
+	
+	function InputChange(x) {
+		SetInput(x.options[x.selectedIndex].text);
+	}
+
+	function FormulaSetChange(x) {
+		//For FormulaTab, when user changes the FormulaSet dropdown, set needs to be appended to the formula
+		var txtFormula = document.getElementById("txtFormula");
+		var elementOperator = document.getElementById("comboFormulaOperator");
+		var Operator = elementOperator.options[elementOperator.selectedIndex].text
+		var NewSet = x.options[x.selectedIndex].text;
+		//alert(NewSet);
+		if (Operator == 'extract') {
+		  txtFormula.value = Operator + ' ' + NewSet + ' RULE';
+		} else if (txtFormula.value == "") {
+			if (Operator == 'score') {
+				txtFormula.value = Operator + ' ' + NewSet;
+			} else {
+				txtFormula.value = NewSet;
+			}
+		} else {
+			if (Operator == 'score') {
+				txtFormula.value = txtFormula.value + ',' + NewSet;
+			} else {
+				txtFormula.value = txtFormula.value + ' ' + Operator + ' ' + NewSet;
+			}
+		}
+		x.selectedIndex = 0;
+	}
+
+    function Help(Page) {
+    	Popup(Page);
+    }
+    ///function for selecting or deselecting listbox items
+    function listSelect(listID, isSelect) {
+        var listbox = document.getElementById(listID);
+        for(var count=0; count < listbox.options.length; count++) {
+            if (isSelect==2) {
+              listbox.options[count].selected = !listbox.options[count].selected;
+            } else {
+              listbox.options[count].selected = isSelect;
+            }
+        }
+    }
+    
+    function listSelectCount(listID, labelID) {
+        var listbox = document.getElementById(listID);
+    	var label = document.getElementById(labelID);
+    	var selected = 0;
+    	var n1 = 0;
+    	var n2 = 0;
+    	var str = '';
+    	var counter = 0;
+        for(var count=0; count < listbox.options.length; count++) {
+            if (listbox.options[count].selected) {
+              selected++;
+              n1 = listbox.options[count].text.lastIndexOf('[');
+              n2 = listbox.options[count].text.lastIndexOf(']');
+              str = listbox.options[count].text.substring(n1+1,n2).trim();
+              counter=counter+Number(str);
+            }
+        }
+    	label.value='count = '+selected+'  [ '+counter+' ]';
+    }
+</script>
+  <style type="text/css">
+ul.LinkedList { display: block; }
+ul.LinkedList ul { display: block; }
+.HandCursorStyle { cursor: pointer; cursor: hand; }  /* For IE */
+  </style>
+<script type="text/JavaScript">
+    //FOR TREEVIEW:
+    // Add this to the onload event of the BODY element
+    
+    function addEvents() {
+      activateTree(document.getElementById("LinkedList1"));
+    }
+
+    // This function traverses the list and add links 
+    // to nested list items
+    function activateTree(oList) {
+      // Collapse the tree
+      for (var i=0; i < oList.getElementsByTagName("ul").length; i++) {
+        if (oList.getElementsByTagName("ul")[i].className == 'ulblock') {
+        oList.getElementsByTagName("ul")[i].style.display="block";
+        } else {
+        oList.getElementsByTagName("ul")[i].style.display="none";
+        }           
+      }                                                                  
+      // Add the click-event handler to the list items
+      if (oList.addEventListener) {
+        oList.addEventListener("click", toggleBranch, false);
+      } else if (oList.attachEvent) { // For IE
+        oList.attachEvent("onclick", toggleBranch);
+      }
+      // Make the nested items look like links
+      addLinksToBranches(oList);
+    }
+
+    // This is the click-event handler
+    function toggleBranch(event) {
+      var oBranch, cSubBranches;
+      if (event.target) {
+        oBranch = event.target;
+      } else if (event.srcElement) { // For IE
+        oBranch = event.srcElement;
+      }
+      cSubBranches = oBranch.getElementsByTagName("ul");
+      if (cSubBranches.length > 0) {
+        if (cSubBranches[0].style.display == "block") {
+          cSubBranches[0].style.display = "none";
+        } else {
+          cSubBranches[0].style.display = "block";
+        }
+      }
+    }
+
+    // This function makes nested list items look like links
+    function addLinksToBranches(oList) {
+      var cBranches = oList.getElementsByTagName("li");
+      var i, n, cSubBranches;
+      if (cBranches.length > 0) {
+        for (i=0, n = cBranches.length; i < n; i++) {
+          cSubBranches = cBranches[i].getElementsByTagName("ul");
+          if (cSubBranches.length > 0) {
+            addLinksToBranches(cSubBranches[0]);
+            cBranches[i].className = "HandCursorStyle";
+            cBranches[i].style.color = "blue";
+            cSubBranches[0].style.color = "black";
+            cSubBranches[0].style.cursor = "auto";
+          }
+        }
+      }
+    }
+  </script>
+  
+<!--- for lookup -->
+<script language="JavaScript" type="text/javascript">
+
+function lookupChange()
+{
+    if (document.getElementById("tab13").getAttribute('class')=='selected') {
+      var value = "";
+      if (self.document.demo.manualLookup.value != "") {
+      	value = self.document.demo.manualLookup.value;
+      } else {
+      	value = self.document.demo.concepttext.value;
+      }
+      if (value !=="") {
+      	lookupChangeServer(value);
+      }
+    }
+    return true
+}
+
+function lookupManualChange()
+{
+    var value = self.document.demo.manualLookup.value;
+      if (value !=="") {
+      	lookupChangeServer(value);
+      }
+    return true
+}
+
+function lookupChangeServer(value)
+{
+      if (value.length > 2) {
+    	// now invoke server-side method
+        var lookupElements = self.document.getElementById("lookupitems");
+	    lookupElements.innerHTML = 'Searching for entities... <br><img src="wait.gif">';
+    	if (0) {
+    	    #call(..LookupServerEntry(value))#
+    	} else {
+    	    #server(..LookupServerEntry(value))#
+    	}
+      }
+    return true;
+}
+
+function selectLookup()
+{
+	var value = self.document.demo.lookup.value;
+	self.document.demo.concepttext.value = value;
+}
+
+function selectLookupElement(value)
+{
+	self.document.demo.concepttext.value = value;
+}
+
+</script>
+
+<script arguments="value:%String,manual:%Boolean" language="Cache" method="LookupServerEntry">
+        // update fields within browser.
+	try {
+		If %session.Get("RTab")'="panellookup" Quit
+		Set domainId=%session.Get("domainId")
+		If domainId="" Quit  ;no iKnow domain available
+		Set projectName=%session.Get("projectName")
+		If projectName="" Quit
+		&sql(Select Id, iKnowBlackLists, iKnowBlacklistIds, Resource
+		     into :projectId, :blacklists, :blacklistIds, :resource
+		     From iKnow_SetAnalysis.Projects
+		     Where Name = :projectName)
+		If SQLCODE'=0 Quit
+
+		Set Elements=""
+		If blacklists'="" {
+			Set Elements="using blacklists : "
+			For iBlacklist=1:1:$ListLength(blacklists) {
+				Set Elements=Elements_$Select(iBlacklist>1:",",1:"")_$List(blacklists,iBlacklist)
+			}
+			Set Elements=Elements_"<br>"
+		}
+
+		Do ##class(%iKnow.Queries.EntityAPI).GetSimilar(.Result,domainId,value,1,50,,,,blacklistIds)
+		Set iResult="",iCount=0
+		Set Elements=Elements_"<table><tr><td>Entity</td><td>Frequency&nbsp;&nbsp;</td><td>Spread</td></tr>"
+		For {
+	    	Set iResult=$Order(Result(iResult)) If iResult="" Quit
+			Set iCount=iCount+1
+	    	Set Entity=$List(Result(iResult),2)
+	    	;escape the single quote
+	    	Set Find=0 For  Set Find=$Find(Entity,"'",Find) Quit:Find=0  Set Entity=$E(Entity,1,Find-2)_"\"_$E(Entity,Find-1,*),Find=Find+1
+			Set Elements=Elements_"<tr><td><a href=""Javascript:selectLookupElement(\'"_Entity_"\');"">"_Entity_"</a></td><td>"_$List(Result(iResult),3)_"</td><td>"_$List(Result(iResult),4)_"</td>"
+			If 0 {  ;Negations not yet to be used
+	    		Set EntityId=$List(Result(iResult),1)
+				Do ##class(%iKnow.Queries.EntityAPI).GetOccurrencesById(.propResult, %session.Get("domainId"), $lb(EntityId))
+				Set Negated=0,iRes=0,NegatedStr=""
+				For {
+					Set iRes=$Order(propResult(iRes)) Quit:iRes=""
+					If $List(propResult(iRes),6)=1 {
+						Set Negated=Negated+1
+						;Set SentenceId=$List(propResult(iRes),4)
+						;Set NegatedStr=NegatedStr_..Quote($E(##class(%iKnow.Queries.SentenceAPI).GetValue(%session.Get("domainId"),SentenceId),1,200))_"<br>"
+					}
+				}
+				Set Elements=Elements_"<td>"_Negated_"</td>"  ;<td>"_NegatedStr_"</td>"
+			}
+			Set Elements=Elements_"</tr>"
+			;Set Elements=Elements_"<tr><td><a href=""Javascript:selectLookupElement();"">"_$List(Result(iResult),2)_"</a></td><td>"_$List(Result(iResult),3)_"</td></tr>"
+		}
+		Set Elements=$Select(iCount=0:"no entities found",1:Elements_"</table>")
+	} catch {
+		Set Elements = $ze
+	}
+    &javascript< var lookupElements = CSPPage.document.getElementById("lookupitems"); >
+	&javascript< lookupElements.innerHTML = '#(Elements)#'; >
+    Quit
+    
+</script>
+
+<script arguments="string:%String" language="Cache" method="Quote">
+   	Set Find=0 For  Set Find=$Find(string,"'",Find) Quit:Find=0  Set string=$E(string,1,Find-2)_"\"_$E(string,Find-1,*),Find=Find+1
+	Quit string
+</script>
+
+<!---scripts for New Project form : --->
+<script language="JavaScript" type="text/javascript">
+  function changeDomain(elem) {
+	 var value = elem.options[elem.selectedIndex].text;
+     #server(..ServerMetaField(value))#;
+     #server(..ServerBlacklist(value))#;
+  }
+</script>
+
+<script arguments="domain:%String,default:%String" language="Cache" method="GetMetaFields" returntype="%String">
+	Set objDomain=##class(%iKnow.Domain).Open(domain) 
+	Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.Fields, objDomain.Id)
+	Set Fields(0)=$ListBuild(,"sourceid")
+	Set InnerHtml=""
+	Set iField=""
+	For {
+	   	Set iField=$Order(Fields(iField)) If iField="" Quit
+		Set InnerHtml=InnerHtml_"<option "_$Select(default=$List(Fields(iField),2):"selected",1:"")_">"_$List(Fields(iField),2)_"</option>"
+	}
+	//are there iTable matafields avalable
+	Try {
+		Do ##class(%DeepSee.DomainExpert.utils.DomainUtils).%isITables(domain,.iTable)
+		If iTable {
+			Do ##class(%DeepSee.DomainExpert.utils.DomainUtils).%GetEntityMetadataFields(domain,.iTableFields)
+			For iField=1:1:$ListLength(iTableFields) {
+				Set InnerHtml=InnerHtml_"<option "_$Select($P(default,":",2)=$List(iTableFields,iField):"selected",1:"")_">iTable:"_$List(iTableFields,iField)_"</option>"
+			}
+		}
+	} catch {
+	}
+	Quit InnerHtml
+</script>
+
+<script arguments="default:%String" language="Cache" method="GetiFindIndexes" returntype="%String">
+	set idxTypes = $lb("%iFind.Index.Basic","%iFind.Index.Semantic","%iFind.Index.Analytic")
+	try {
+		for i=1:1:$listlength(idxTypes) {
+			set idxType = $list(idxTypes,i)
+			&sql(declare curs cursor for select parent, name from %Dictionary.CompiledIndex where TypeClass=:idxType)
+			&sql(open curs)
+			Set InnerHtml="<option>-- Select an existing iFind index (optional) --</option>"
+			for {
+				&sql(fetch curs into :className, :indexName)
+				quit:SQLCODE'=0
+				Set InnerHtml=InnerHtml_"<option "_$Select(default=className_":"_indexName:"selected",1:"")_">"_className_":"_indexName_"</option>"
+			}
+			&sql(close curs)
+		}
+	} catch {
+		Set InnerHtml=""
+	}
+	Quit InnerHtml
+</script>
+
+<script arguments="domain:%String,default:%String" language="Cache" method="GetBlacklists" returntype="%String">
+	Set objDomain=##class(%iKnow.Domain).Open(domain)
+	if objDomain="" Quit ""
+	Set DomainId=objDomain.Id
+	Do ##class(%iKnow.Utils.MaintenanceAPI).GetBlackLists(.resultBlacklists,DomainId,1)
+	Set iBlacklist=""
+	Set InnerHtml=""
+	For {
+		Set iBlacklist=$Order(resultBlacklists(iBlacklist),1,data) If iBlacklist="" Quit
+		Set Name=$List(data,2)
+		Set InnerHtml=InnerHtml_"<option "_$Select($ListFind(default,Name):"selected",1:"")_">"_Name_"</option>"
+	}
+	Quit InnerHtml
+</script>
+
+<script arguments="value:%String" language="Cache" method="ServerMetaField">
+	Set InnerHtml=..GetMetaFields(value,"")
+	Try {
+	    &javascript< var MetaField = CSPPage.document.getElementById("NewProjectiKnowMetaField"); >
+		&javascript< MetaField.innerHTML = '#(InnerHtml)#'; >
+	} Catch {
+		Set InnerHtml=InnerHtml_"<option>"_$ZE_"</option>"
+		&javascript< MetaField.innerHTML = '#(InnerHtml)#'; >
+	}
+    Quit
+    
+</script>
+
+<script arguments="value:%String" language="Cache" method="ServerBlacklist">
+	Set InnerHtml=..GetBlacklists(value,"")
+	Try {
+	    &javascript< var Blacklists = CSPPage.document.getElementById("NewProjectBlacklists"); >
+		&javascript< Blacklists.innerHTML = '#(InnerHtml)#'; >
+	} Catch {
+		Set InnerHtml=InnerHtml_"<option>"_$ZE_"</option>"
+		&javascript< Blacklists.innerHTML = '#(InnerHtml)#'; >
+	}
+    Quit
+    
+</script>
+  
+<body onload="addEvents();">
+<script language="cache" runat="server">
+  #Include %IKPublic
+  Set action=$get(%request.Data("action",1))
+  Set CurrentPlugin=""
+  Do ..Debug("action",action)
+  set hideList=1,hidePat=1,hideRule=1
+  set errorSave=""
+  
+  Set (projectName, projectId, domainName, domainId, metadataField) = ""
+  
+  If (action="CreateProject")&($system.Security.Check("SetAnalysis_CreateProject","U")) {
+	Set NewProjectName=$Get(%request.Data("NewProjectName",1))
+	Set NewProjectDescription=$Get(%request.Data("NewProjectDescription",1))
+	Set NewProjectiKnowDomain=$Get(%request.Data("NewProjectiKnowDomain",1))
+	Set NewProjectiKnowMetaField=$Get(%request.Data("NewProjectiKnowMetaField",1))
+	Set NewProjectiKnowMetaFieldMethod=$Get(%request.Data("NewProjectiKnowMetaFieldMethod",1))
+	Set NewProjectResource=$Get(%request.Data("NewProjectResource",1))
+	Set NewProjectchkPublic=$Get(%request.Data("NewProjectchkPublic",1))
+	Set NewProjectBlacklists=""
+	Set iBlacklist=""
+	For  {
+		Set iBlacklist=$Order(%request.Data("NewProjectBlacklists",iBlacklist)) If iBlacklist="" Quit
+		Set NewProjectBlacklists=NewProjectBlacklists_$Listbuild(%request.Data("NewProjectBlacklists",iBlacklist))
+	}
+	Set OkProject=""
+  	;validate new project parameters
+	If NewProjectName="" Set OkProject="Name can not be empty"
+	If ##class(iKnow.SetAnalysis.Projects).ProjectNameExists(NewProjectName) Set OkProject="Project name already exists"
+  	If OkProject="" {
+		;save project
+		Set Now = +$H
+		&sql(Insert Into iKnow_SetAnalysis.Projects (Name, Description, iKnowDomain, iKnowMetafield, iKnowMetafieldMethod, Resource, iKnowBlacklists, Created, Modified, IsPublic)
+		     Values (:NewProjectName, :NewProjectDescription, :NewProjectiKnowDomain, :NewProjectiKnowMetaField, :NewProjectiKnowMetaFieldMethod,:NewProjectResource,:NewProjectBlacklists, :Now, :Now, :NewProjectchkPublic)) 
+	  	Set %request.Data("project",1)=NewProjectName
+	  	Job ##class(iKnow.SetAnalysis).AddSecurity(NewProjectResource)  ;todo : or do in SYS namespace ??
+  	} else {
+  		Set action="newproject"
+  	}
+  } elseif action="saveproject" {
+	Set NewProjectName=$Get(%request.Data("editProjectName",1))
+	Set NewProjectDescription=$Get(%request.Data("editProjectDescription",1))
+	Set OldProjectName = %session.Data("projectName")
+	Set NewProjectiKnowMetafieldMethod=$Get(%request.Data("editiKnowMetafieldMethod",1))
+	Set NewProjectiKnowMetafield=$Get(%request.Data("editiKnowMetafield",1))
+	Set NewProjectchkPublic=$Get(%request.Data("chkPublic",1))
+	Set NewProjectiKnowBlacklists=""
+	Set NewProjectSetRepositories=""
+	Set iBlacklist=""
+	For  {
+		Set iBlacklist=$Order(%request.Data("editiKnowBlacklists",iBlacklist)) If iBlacklist="" Quit
+		Set NewProjectiKnowBlacklists=NewProjectiKnowBlacklists_$Listbuild(%request.Data("editiKnowBlacklists",iBlacklist))
+	}
+	Set iRep=""
+	For  {
+		Set iRep=$Order(%request.Data("editSetRepositories",iRep)) If iRep="" Quit
+		Set NewProjectSetRepositories=NewProjectSetRepositories_$Listbuild(%request.Data("editSetRepositories",iRep))
+	}
+	Set Now = +$H
+	&sql(Update iKnow_SetAnalysis.Projects (Name, Description, iKnowMetafield, iKnowMetafieldMethod, iKnowBlacklists, SetRepositories, Modified, IsPublic)
+	     Values (:NewProjectName, :NewProjectDescription, :NewProjectiKnowMetafield, :NewProjectiKnowMetafieldMethod, :NewProjectiKnowBlacklists, :NewProjectSetRepositories, :Now, :NewProjectchkPublic)
+	     Where Name = :OldProjectName)
+	If SQLCODE = 0 Do %session.Set("projectName",NewProjectName)
+  } elseif action="deleteproject" {
+	  Set projectName=%session.Data("projectName")
+	  &sql(Select Id into :projectId From iKnow_SetAnalysis.Projects Where Name = :projectName)
+	  Do ##class(iKnow.SetAnalysis).DeleteProject(projectId)
+	  Set action="switchproject",projectId=""
+  }
+  
+  If action'="switchproject" {
+	  Set projectName=$Select($Data(%request.Data("project",1)):%request.Data("project",1),$Data(%session.Data("projectName")):%session.Data("projectName"),1:"")
+	  If projectName'="" {
+	  	  &sql(Select Id, iKnowDomain, iKnowMetafield, Resource
+	  	  	   into :projectId, :domainName, :metadataField, :resource
+	  	  	   From iKnow_SetAnalysis.Projects
+	  	  	   Where Name = :projectName)
+		  If SQLCODE=0 {  	  
+	  	    Do %session.Set("projectName",projectName)
+		    Do %session.Set("domainName",domainName)	  
+	  	    Set objDomain=##class(%iKnow.Domain).Open(domainName)
+	        If objDomain'="" {
+	  	      Set domainId=objDomain.Id
+	  	      Set domainName=objDomain.Name
+	  	      Do %session.Set("domainId",domainId)
+	        }
+		  }
+	  }
+  }
+  
+  Set step="setanalysis"
+  If action="newproject" {
+	  Set step="create_project"
+  } elseIf projectId="" {
+      Set objSQL=##class(%SQL.Statement).%New()
+	  Set sc=objSQL.%Prepare("Select ID, Name, Description,Resource From iKnow_SetAnalysis.Projects Order By Name")
+	  Set objStatement=objSQL.%Execute()
+	  Set projects=0
+	  While objStatement.%Next() {
+		If $system.Security.Check("SetAnalysis_CreateProject", "U")!$system.Security.Check("SetAnalysis_Project"_$Select(objStatement.%GetData(4)="":"Default",1:objStatement.%GetData(4)),"R") {
+	    	Set projects($I(projects))=$ListBuild(objStatement.%GetData(1),objStatement.%GetData(2),objStatement.%GetData(3))
+		}
+	  }
+
+	Set step="choose_project"
+	
+  }
+		  
+  If step="setanalysis" {
+	Do %session.Set("domainId",domainId)
+	Set Set=""
+	Do ..Debug("PluginId",$Get(%request.Data("actionList",1))) 
+	Do ..Debug("projectId",projectId) 
+	Do ..Debug("domainId",domainId) 
+	Do ..Debug("inputset",$Get(%request.Data("inputset",1)))
+	Do ..Debug("inputpattern",$Get(%request.Data("inputpattern",1)))
+	Set resultEnt=0,deepseeEnabled=0,restEnabled=0,setdescription=""
+  	if (action="detail")!(action="nodetail") { //user clicked on href [+] or [-]
+	  Set Set=$ZCVT($Get(%request.Data("set",1)),"I","URL")
+	  Set Type=$Get(%request.Data("type",1))
+	  Set %session.Data("sets",Set,Type)=(action="detail")
+  	} elseif (action="execute")!(action="batch") {  //user clicked on [execute] or [batch]
+	  Set %session.Data("Tab")="plugin"
+ 	  If action="execute" set hideList=0,hidePat=0
+	  //this block is the same for save when [execute] is disabled
+	  Set Concept=%request.Data("concepttext",1)_%request.Data("conceptarea",1)
+	  Set InputSet=$ZCVT(%request.Data("inputset",1),"I","URL")
+	  Set InputPattern=$Get(%request.Data("inputpattern",1))
+ 	  Set %session.Data("concepttext")=%request.Data("concepttext",1)
+ 	  Set %session.Data("conceptarea")=%request.Data("conceptarea",1)
+ 	  Set PluginId=%request.Data("actionList",1)
+ 	  Set %session.Data("definition")=$ListBuild(0,PluginId,Concept,InputSet,,,InputPattern)
+	  Merge SessionFilter=%session.Data("filters")
+	  Set resultPtr=""
+	  Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId,projectId,Concept,InputPattern,InputSet,.SessionFilter,,.resultPtr,(action="batch"))
+	  //end of block
+  	  Do ..Debug("resultPtr",resultPtr)
+  	  Set %session.Data("resultPtr")=resultPtr
+  	  If resultPtr'="" Merge resultEnt=^iKnow.SetAnalysisTemp(resultPtr,"S")
+	  Set %session.Data("iAction")=%request.Data("actionList",1)
+	  Set %session.Data("inputset")=InputSet
+ 	  Set %session.Data("inputpattern")=InputPattern
+	  Do ..Debug("Concept",Concept)
+	  Do ..Debug("Status",sc)
+	  Do ..Debug("#Results",$Get(resultEnt))
+  	} elseif ($E(action,1,3)="add")&(action'="addrule") {                                    //user clicked on [add] (filter)
+	    Write action,"<br>"
+	    Set %session.Data("Tab")="filter"
+  		Set iCount=$E(action,4,*)
+  		Set filterField=$Get(%request.Data("filterField"_iCount,1))
+  		Set filterOperator=$Get(%request.Data("filterOperator"_iCount,1))
+  		Set filterDisplayValue1=$Get(%request.Data("filterValueA"_iCount,1))
+  		Set filterDisplayValue2=$Get(%request.Data("filterValueB"_iCount,1))
+		If filterDisplayValue1'="" {
+			Set (iFilter,%session.Data("filters"))=$Get(%session.Data("filters"))+1
+			Set filterValue1=##class(iKnow.SetAnalysis).DisplayToMetaValue(filterDisplayValue1,domainId,filterField)
+			Set filterValue2=##class(iKnow.SetAnalysis).DisplayToMetaValue(filterDisplayValue2,domainId,filterField)
+			Set %session.Data("filters",iFilter)=$lb(filterField,filterOperator,$S(filterOperator="BETWEEN":filterValue1_$$$MDVALSEPARATOR_filterValue2,1:filterValue1),$S(filterOperator="BETWEEN":filterDisplayValue1_$$$MDVALSEPARATOR_filterDisplayValue2,1:filterDisplayValue1))
+		}
+  	    Set showFilterBlock="block"
+  	} elseif action="delfilter" {                                    //user clicked on [x] (filter)
+  	    set hideList=0,hidePat=0
+		Kill %session.Data("filters",%request.Data("filter",1))
+  	} elseif action="delset" {                                       //user clicked on [x] (set)
+  	    set hideList=0,hidePat=0     
+        //todo : add projectId
+		Do ##class(iKnow.SetAnalysis).RemoveSet(projectId,%request.Data("set",1))
+  	} elseif action="editset" {                                      //user clicked on [edit] (set)
+	    Set %session.Data("Tab")="plugin"
+		Set %session.Data("concepttext")=""
+		Set %session.Data("conceptarea")=""
+		set Set=%request.Data("set",1)
+		Do ##class(iKnow.SetAnalysis).GetResultSet(projectId,.resultPtr,.selectedResult,Set,.filters,.definition,.blacklistmembers,.deepseeEnabled,.restEnabled,.setdescription)
+  	  	Set %session.Data("resultPtr")=resultPtr
+  	  	Merge resultEnt=^iKnow.SetAnalysisTemp(resultPtr,"S")
+		Kill %session.Data("filters")
+		Merge %session.Data("filters")=filters
+		Set %session.Data("definition")=definition
+		If definition'="" {
+			Set (%session.Data("concepttext"),%session.Data("conceptarea"))=$List(definition,3)
+			Set %session.Data("inputset")=$ListGet(definition,4)
+			Set %session.Data("inputpattern")=$ListGet(definition,7)
+			Set %session.Data("setdescription")=$ListGet(definition,8)
+			Set %session.Data("iAction")=$ListGet(definition,2)
+		}
+  	    set hideList=0  ;only if DisableManualSelection=0
+		set PluginId = $ListGet(definition,2)
+	  	&sql(select DisableManualSelection Into :DisableManualSelection From iKnow.SetAnalysisPlugin Where ID = :PluginId)
+		Set hideList=$Select(DisableManualSelection=1:1,1:0) 
+  	    set hidePat=0
+		Set %session.Data("set")=Set
+		Set %session.Data("deepseeEnabled")=deepseeEnabled
+		Set %session.Data("restEnabled")=restEnabled
+  	} elseif action="editcalcset" {                                      //user clicked on [edit] (calculated set)
+	    Set %session.Data("Tab")="formula"
+  	    set hideList=1,hidePat=1
+		Set %session.Data("concepttext")=""
+		Set %session.Data("conceptarea")=""
+		set logicset=%request.Data("set",1)
+  	    Kill %session.Data("resultPtr")
+		Kill %session.Data("filters")
+		Kill %session.Data("definition")
+		Set formula=##class(iKnow.SetAnalysis).GetFormula(projectId,logicset,.deepseeEnabled,.restEnabled,.setdescription,.formulaOperator)
+		Set %session.Data("logicset")=logicset
+		Set %session.Data("deepseeEnabled")=deepseeEnabled
+		Set %session.Data("restEnabled")=restEnabled
+		Set %session.Data("formulaOperator")=formulaOperator
+  	} elseif (action="replacerule")!(action="addrule") {                //user clicked on [replacerule] or [addrule]
+	  	set Rule=%request.Data("rule",1)
+	  	If Rule'="" {
+	  		Merge entities=%request.Data("entities")
+  			Set resultPtr = %session.Data("resultPtr")
+    		Merge resultEnt = ^iKnow.SetAnalysisTemp(resultPtr,"S")
+			Kill entIds
+			Set iEnt="" For {
+				Set iEnt=$order(entities(iEnt)) If iEnt="" Quit
+				If entities(iEnt)'="" Set entIds(entities(iEnt))=""
+			}
+	  		Kill Rules
+	  		Set iSort=""
+	  		For {
+	  			Set iSort=$Order(resultEnt(iSort)) If iSort="" Quit
+	  			Set entId=""
+	  			For {
+	  				Set entId=$Order(resultEnt(iSort,entId)) If entId="" Quit
+	  				If $Data(entIds(entId)) {
+		  				Set data=$List(resultEnt(iSort,entId),1)
+	  					If $E(data,*)="]" Set data=$P(data," [",1,*-1)
+	  					Set data=$ZStrip(data,"<>W")
+		  				Set Rules($I(Rules))=data
+	  				}
+	  			}
+	  		}
+			Do ##class(iKnow.SetAnalysis.XRules).SaveRules(projectId, Rule, .Rules, action="replacerule")
+	  	}
+  	} elseif (action="saveset")!(action="mergeset") {                //user clicked on [save] or [merge] (set)
+	    Set %session.Data("Tab")="plugin"
+		set Set=$ZCVT(%request.Data("set",1),"I","URL")
+		If Set'="" {
+			//if plugin has DisableManualSelection=1, there is no session entities/def/resultptr
+			//we need to directly execute the plugin, and use the array to fill entities
+ 	  		Set PluginId=%request.Data("actionList",1)
+	  		&sql(select DisableManualSelection Into :DisableManualSelection From iKnow.SetAnalysisPlugin Where ID = :PluginId)
+			If DisableManualSelection {
+	  			Set Concept=%request.Data("concepttext",1)_%request.Data("conceptarea",1)
+	  			Set InputSet=$ZCVT(%request.Data("inputset",1),"I","URL")
+	  			Set InputPattern=$Get(%request.Data("inputpattern",1))
+ 	 			Set %session.Data("concepttext")=%request.Data("concepttext",1)
+ 	  			Set %session.Data("conceptarea")=%request.Data("conceptarea",1)
+				Set definition=$ListBuild(0,PluginId,Concept,InputSet,,,InputPattern)
+ 	  			Set %session.Data("definition")=definition
+	  			Merge filters=%session.Data("filters")
+	  			Set resultPtr=""
+	  			Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId,projectId,Concept,InputPattern,InputSet,.filters,,.resultPtr,0)
+  	  			Set %session.Data("resultPtr")=resultPtr
+  	  			;If resultPtr'="" Merge resultEnt=^iKnow.SetAnalysisTemp(resultPtr,"S")
+  	  			;--> entities
+  	  			Set sort="",iInc=0 For {
+	  	  			Set sort=$Order(^iKnow.SetAnalysisTemp(resultPtr,"S",sort)) If sort="" Quit
+  	  				Set id="" For {
+	  	  				Set id=$Order(^iKnow.SetAnalysisTemp(resultPtr,"S",sort,id)) If id="" Quit
+  	  					Set entities($I(iInc))=id
+  	  				}
+  	  			}
+	  			Set %session.Data("iAction")=%request.Data("actionList",1)
+	  			Set %session.Data("inputset")=InputSet
+ 	  			Set %session.Data("inputpattern")=InputPattern
+			} Else {
+	  			Set definition=%session.Data("definition")
+	  			Merge filters=%session.Data("filters")
+	  			Set resultPtr = %session.Data("resultPtr")
+
+	  			Merge entities=%request.Data("entities")
+	  			kill ^dwdebugent m ^dwdebugent=entities
+			}
+  			Merge blacklistmembers=%request.Data("blacklistmembers")
+    		Merge resultEnt = ^iKnow.SetAnalysisTemp(resultPtr,"S")
+			set deepseeEnabled=$Get(%request.Data("sDeepseeEnabled",1))
+			set restEnabled=$Get(%request.Data("sRestEnabled",1))
+			set setdescription=$Get(%request.Data("setdescription",1))
+			kill ^dwdebug merge ^dwdebug(1)=%request.Data
+    		If '##class(iKnow.SetAnalysis).SaveSet(projectId,metadataField,Set,definition,.entities,(action="mergeset"),.filters,resultPtr,.blacklistmembers,.deepseeEnabled,.restEnabled,setdescription) {
+    			Set errorSave="Cannot merge in existing Set if filters are not the same !"
+    			Set iEnt="" For  {
+	    			Set iEnt=$Order(entities(iEnt)) If iEnt="" Quit
+	    			Set selectedResult(entities(iEnt))=""
+    			}
+  	    		set hideList=0,hidePat=0    
+    		}
+	    	Set %session.Data("set")=Set
+		}
+  	} elseif action="renameset" {
+	  	If $Get(%session.Data("set"))'="" {
+		  	Do ##class(iKnow.SetAnalysis).RenameSet(projectId, %session.Data("set"), $zcvt(%request.Data("set",1),"I","URL"))
+		    Set %session.Data("set")=$ZCVT(%request.Data("set",1),"I","URL")
+	  	}
+  	} elseif action="renamecalc" {
+	  	If $Get(%session.Data("logicset"))'="" {
+		  	Do ##class(iKnow.SetAnalysis).RenameSet(projectId, %session.Data("logicset"), $zcvt(%request.Data("logicset",1),"I","URL"))
+		    Set %session.Data("logicset")=$ZCVT(%request.Data("logicset",1),"I","URL")
+	  	}
+  	} elseif action="setfilter" {                                  //user clicked on [save] (filter on Sets)
+		Set %session.Data("setfilter")=%request.Data("setfilter",1)
+  	} elseif action="calculate" {                                  //user clicked on [calculate] (formula)
+	    Set %session.Data("Tab")="formula"
+		set deepseeEnabled=$Get(%request.Data("fDeepseeEnabled",1))
+		set restEnabled=$Get(%request.Data("fRestEnabled",1))
+		set setdescription=$Get(%request.Data("setdescription",1))
+		Set formula=$ZCVT(%request.Data("formula",1),"I","URL")
+		set logicset=$ZCVT(%request.Data("logicset",1),"I","URL")
+ 		if logicset'="",formula'="" {
+	  		Set ErrorCalc = ##class(iKnow.SetAnalysis).Formula(projectId,logicset,formula,deepseeEnabled,restEnabled,1,setdescription)
+			If ErrorCalc'="" {
+				Set %session.Data("logicset")=Set
+			}
+		Set formulaOperator=%request.Data("FormulaOperator",1)
+		Set %session.Data("formulaOperator")=formulaOperator
+  		}
+  	} elseif action="export" {
+  		Do ##class(iKnow.SetAnalysis).ExportCSV(projectId,$ZCVT(%request.Data("set",1),"I","URL"),%request.Data("type",1))
+  	} elseif action="import" {
+  		Do ##class(iKnow.SetAnalysis.Storage.Set).RestoreSet(%request.Data("set",1))
+  	} elseif action="recalculate" {
+	    Set %session.Data("Tab")="tools"
+  		Job ##class(iKnow.SetAnalysis).UpdateAllSets(projectId)
+  		Hang 1
+  	} elseif action="builddashboard" {
+	    Set %session.Data("Tab")="tools"
+  		Job ##class(iKnow.SetAnalysis).BuildCube()
+  		Hang 1
+  	} elseif action="cleartemp" {
+	    Set %session.Data("Tab")="tools"
+	    Kill ^iKnow.SetAnalysisTemp
+	    Do ##class(iKnow.SetAnalysis).Log("Temporary SetAnalysis Results killed")
+  	} elseif action="clearlog" {
+	    Set %session.Data("Tab")="tools"
+  		Kill ^iKnow.SetAnalysisLog
+  	} elseif $E(action,1,3)="tab" {
+	    Set %session.Data("Tab")=$E(action,4,*)
+  	} elseif $E(action,1,3)="rtab" {
+	    Set %session.Data("RTab")=$E(action,4,*)
+  	} elseif action="setsdetail" {
+	    Set %session.Data("RTab")="detail"
+  	} elseif action="setsoverview" {
+	    Set %session.Data("RTab")="overview"
+  	} elseif action="setstreeview" {
+	    Set %session.Data("RTab")="treeview"
+  	} elseif action="setspanellookup" {
+	    Set %session.Data("RTab")="panellookup"
+  	} elseif action="tabproject" {
+	    Set %session.Data("Tab")="project"
+  	} elseif action="importfile" {
+	    Set %session.Data("Tab")="tools"
+	    If ##class(%File).Exists(%request.Data("filename",1)) {
+	    	Job ##class(iKnow.SetAnalysis).ImportFile(projectId, %request.Data("filename",1))
+	    	Hang 1
+	    } else {
+			Do ##class(iKnow.SetAnalysis).Log("File '"_%request.Data("filename",1)_"' does not exist on server !")
+	    }
+  	
+  	} elseif action="saveproject" {
+	    Set %session.Data("Tab")="project"
+	    ;projectName, projectDescription
+  	
+  	}
+
+  }
+  Set Tab=$Get(%session.Data("Tab"),"plugin")
+  Set RTab=$Get(%session.Data("RTab"),"detail")
+
+</script>
+
+
+
+<csp:if condition='step="setanalysis"'>
+<!--  <i>SetAnalysis Project <b>#(projectName)#</b> on Domain <b>#(domainName)#</b> (#(domainId)#), based on metadatafield <b>#(metadataField)#</b></i> --->
+ <form name="demo" action="iKnowSetAnalysis.csp" method="post">
+ <div id="DockSplitter">
+   <div class="left">
+     <span class="tabs">
+       <ul>
+	     <li id="tab6"><a href="JavaScript:TabToggle('project');">Project</a></li>
+	     <li id="tab2"><a href="JavaScript:TabToggle('plugin');">Sets</a></li>
+	     <li id="tab3"><a href="JavaScript:TabToggle('formula');">Formula</a></li>
+	     <li id="tab1"><a href="JavaScript:TabToggle('filter');">Filter</a></li>
+	     <li id="tab4"><a href="JavaScript:TabToggle('tools');">Tools</a></li>
+	     <li id="tab5"><a href="iKnowSetAnalysisHelp.csp">Help</a></li>
+       </ul>
+     </span> <!--tabs-->
+     <br>  
+     <div class="main">
+       <div id="projectBlock" >
+         <script language="cache" runat="server">
+          &sql(Select Name,Description,iKnowDomain,iKnowMetafield,iKnowMetafieldMethod,Resource,iKnowBlacklists, SetRepositories, IsPublic
+               Into :pName,:pDescription,:piKnowDomain,:piKnowMetafield,:piKnowMetafieldMethod,:pResource, :piKnowBlacklists, :pSetRepositories, :pIsPublic
+               from iKnow_SetAnalysis.Projects
+               where ID = :projectId)
+        </script>
+         <br>
+           <table>
+             <tr>
+               <td><span class="label">Name : </span></td>
+               <td><input type="text" name="editProjectName" value="#(pName)#" class="box40"/></td>
+             </tr>
+             <tr  valign="top">
+               <td><span class="label">Description : </span></td>
+               <td><textarea name="editProjectDescription" class="box40" rows=6>#(pDescription)#</textarea></td>
+             </tr>
+             <tr>
+               <td><span class="label">iKnow Domain : </span></td>
+               <td>#(piKnowDomain)#</td>
+             </tr>
+             <tr>
+               <td><span class="label">iKnow metadatafield : </span></td>
+		       <td>
+			     <select name="editiKnowMetafield" class="box40">
+		           <script language="cache" runat="server">
+				    If $Get(piKnowDomain)'="" {
+					  Write ..GetMetaFields(piKnowDomain,$Get(piKnowMetafield))
+				    }
+	              </script>
+	             </select>
+               </td>
+             </tr>
+             <tr>
+               <td><span class="label">iKnow metadatafield method : </span></td>
+               <td><input type="text" name="editiKnowMetafieldMethod" class="box40" value="#(piKnowMetafieldMethod)#" /></td>
+			 </tr>
+			 <tr>
+               <td><span class="label">Resource : </span></td>
+               <td>#(pResource)#</td>
+             </tr>
+             <tr  valign="top">
+               <td><span class="label">iKnow blacklists : </span></td>
+               <td>
+	             <select name="editiKnowBlacklists" multiple class="box40" size=5>
+	               <script language="cache" runat="server">
+				    if $Get(piKnowDomain)'="" {
+					    Write ..GetBlacklists(piKnowDomain,$Get(piKnowBlacklists))
+				    }         
+	              </script>
+	             </select>
+               </td>
+             </tr>
+             <tr valign="top">
+               <td><span class="label">Set Repositories : </span></td>
+               <td>
+	             <select name="editSetRepositories" multiple class="box40" size=5>
+	               <script language="cache" runat="server">
+					;todo get all classes that inherit from setrepository
+					set result = ##class(%ResultSet).%New("%Dictionary.ClassDefinitionQuery:SubclassOf")
+					do result.Execute("%DeepSee.Sets.ArraySetRepository")
+					while (result.Next()) {
+						set className = result.GetData(1)
+						Write "<option "_$Select($ListFind($Get(pSetRepositories),className):"selected",1:"")_">",className,"</option>"
+					}
+	              </script>
+	             </select>
+               </td>
+             </tr>
+             <tr>
+               <td><span class="label">Public (visible for all) : </span></td>
+               <td><input id="chkPublic" type="checkbox" name="chkPublic" value=1 #($s($Get(pIsPublic)=1:"checked",1:""))#/>&nbsp;
+             </tr>
+             <tr>
+               <td></td>
+               <td><br>
+			     <csp:if condition='$system.Security.Check("SetAnalysis_CreateProject","U")'>
+                   <button type="submit" name="action" value="saveproject" title="Save this project">saveproject</button> &nbsp;
+                   <button type="submit" name="action" value="deleteproject" title="Delete this project" onclick="return confirm('Do you Realy want to Delete this Project ???');">deleteproject</button> &nbsp;
+                 </csp:if>
+                 <button type="button" name="action" onclick="window.location.href = 'iKnowSetAnalysis.csp?CacheLogout=end'" title="Close this project and select another one">switchproject</button>
+               </td> 
+             </tr>
+           </table>
+       </div>
+       <div id="pluginBlock" >
+         <table id="tblPluginBlock">
+           <csp:if condition='1'>
+           <!---- block for entities section --->
+	           <tr>
+	             <td colspan=5><br><i>Create a set with plugin :</i>
+			       <select class="input" name="actionList" id="actionList" onChange="InputChange(this)">
+				   <script language="cache" runat="server">
+					Do ##class(iKnow.SetAnalysisPlugin).GetActions(.ActionList)
+					Set CurrentPlugin=""
+				    Set iAction="" For {
+				    	set iAction=$order(ActionList(iAction),1,Data) If iAction="" Quit
+				    	;default plugin : first plugin which has Order > 0 (main plugin)
+						If CurrentPlugin="",$List(Data,12)>0,$Get(%session.Data("iAction"))'="" Set CurrentPlugin=$List(Data,2)
+				        write "<option value='"_$list(Data,1)_"'"
+				        If ($list(Data,1)=$Get(%session.Data("iAction"))) ! (($Get(%session.Data("iAction"))="")&(CurrentPlugin="")&($List(Data,12)>0)){
+					    	write " selected"
+					        Set CurrentPlugin=$List(Data,2)
+				        }
+				    	write ">"
+				    	write $list(Data,2),"</option>"
+				    }
+				   </script>
+			      </select>
+			    </td>
+			  </tr>
+			  <tr>
+			    <td>
+			      <table>
+			        <tr>
+			          <td colspan=2 class="help"><i><div id="showhelp">Help</div></i></td>
+			        </tr>
+			        <tr>
+			          <td><span class="label"><div id="showinputlabel">Input</div></span></td>
+			          <td>
+			            <span id="showinputtext">
+			              <input type="text" name="concepttext" id="concepttext" class="box40" value="#($Get(%session.Data("concepttext")))#" size="50" onkeyup="lookupChange();"/>
+			            </span>
+			          </td>
+			        </tr>
+	                <tr>
+	                  <td colspan="2">
+			            <div id="showinputarea">
+			              <textarea name="conceptarea" id="conceptarea" class="box40" rows=4>#($Get(%session.Data("conceptarea")))#</textarea>
+			            </div>
+			          </td>
+			        </tr>
+					<tr>
+		              <td>
+		                <div id="showinputpatternlabel">
+	                      <span class="label">Pattern</span>
+	                    </div>
+	                  </td>
+	                  <td>
+	                    <div id="showinputpattern">
+	                      <select name="inputpattern" class="box40">
+	                         <option value="">no pattern</option>
+		                     <script language="cache" runat="server">
+				          	Do ##class(iKnow.SetAnalysis.Patterns).GetPatterns(.Patterns)
+				            Set InputPattern="" For {
+				            	set InputPattern=$order(Patterns(InputPattern)) If InputPattern="" Quit
+				                write "<option value=",$List(Patterns(InputPattern),1)," ",$Select($List(Patterns(InputPattern),1)=$Get(%session.Data("inputpattern")):" selected",1:""),">"
+				                write $List(Patterns(InputPattern),2),"</option>"
+				            }
+				           </script>
+	                         
+	                         
+	                      </select>
+	                    </div>
+			           </td>
+	                </tr>
+			        <tr>
+			          <td><span class="label"><div id="showsetlabel">Input</div></span></td>
+			          <td>
+			            <div id="showinputset">
+			              <select name="inputset" id="inputset" class="box40">
+			                <option value=''>input not based on another set</option>
+				            <script language="cache" runat="server">
+				          	Do ##class(iKnow.SetAnalysis).GetSets(projectId,.Sets,1)
+				            Set sortSet="" For {
+				            	set sortSet=$order(Sets(sortSet),1,data) If sortSet="" Quit
+				                write "<option ",$Select(sortSet=$Get(%session.Data("inputset")):" selected",1:""),">"
+				                write $List(data,1),"</option>"
+				            }
+				           </script>
+			              </select>
+			            </div>
+			          </td>
+			        </tr>
+				    <tr>
+				      <td></td><td>
+				       <div id="showexecutebatch">
+			            <button type="submit" name="action" value="execute" title="Execute the plugin to fetch a list of values where you can select">execute</button>
+			            &nbsp;<button type="submit" name="action" value="batch" title="Launch the execute in background, you can refresh the screen until the results are ready to be used.">batch</button>
+			            </div>
+			          </td>
+			        </tr>
+			      </table>
+			    </td>
+			  </tr>
+			  <tr>
+			    <td>
+			      <div id="selectelementssection">   
+			      <csp:if condition="hideList'=99">
+	                <script language="cache" runat="server">
+	                  Set MaxLength=0
+	                  Set sort="" For {
+	                     set sort=$order(resultEnt(sort)) If sort="" Quit
+	                 	 Set id="" For  {
+	             	 	   set id=$order(resultEnt(sort,id),1,data) If id="" Quit
+	             		   If $Length($list(data,1))>MaxLength Set MaxLength=$Length($list(data,1))
+	             	 	}
+	             	  }
+	             	  Set Px=$Select(MaxLength<70:400,MaxLength<100:550,1:1200)
+	             	  // MBR: Changed the width to 100%
+	             	  // Set Style=$Select(MaxLength<100:"",1:"overflow:auto;width:"_(Px-100)_"px;")
+	             	  Set Style=$Select(MaxLength<100:"",1:"overflow:auto;width:100%;")
+	           	    </script>
+	                 <div style="#(Style)#" align="left">  
+	                   <script language="cache" runat="server">
+	                     // MBR: changed the width to 100%
+	                     // <select style= "width:#(Px)#px;" class="input" size=#($Select($Get(resultEnt)>15:15,1:resultEnt))# multiple name="entities" id="listentities">
+	                  </script>
+	                  <span><i>Select at least one element in following list:</i></span><br>
+	                   <select style= "width:100%" class="input" size=#($Select($Get(resultEnt)>15:15,1:resultEnt))# multiple name="entities" id="listentities">
+	                     <script language="cache" runat="server">
+	                 		Set sort="" For {
+	                     		set sort=$order(resultEnt(sort)) If sort="" Quit
+	                 	 		Set id=""
+	                 	 		For  {
+			              			set id=$order(resultEnt(sort,id),1,data) If id="" Quit
+			             			write "<option value='"_$ZCVT(id,"O","HTML")_"'"
+			  		            	If $Data(selectedResult(id)) {
+				            			write " selected"
+			            			} elseIf $ListValid(id),$Data(selectedResult($List(id,1))) {
+				            			write " selected"
+			            			} elseif $order(resultEnt(sort,id,""))'="" {
+			            				set firstId=$order(resultEnt(sort,id,""))
+			            				If $Data(selectedResult(firstId)) write " selected"
+			            			}
+			            			write ">"
+			            			write $list(data,1),"</option>"
+		                 		}
+		             		}
+		                 </script>
+		                </select>
+		                <br><input type="button" name="selectall" class="smallbutton" value="select all" onClick="JavaScript:listSelect('listentities',1);"/>
+		                <input type="button" class="smallbutton" name="selectnone" value="select none" onClick="JavaScript:listSelect('listentities',0);"/>
+		                <input type="button" class="smallbutton" name="selectinvert" value="invert" onClick="JavaScript:listSelect('listentities',2);"/>
+		                <input type="button" class="smallbutton" name="listcount" id="labellistcount" value="count" onClick="JavaScript:listSelectCount('listentities','labellistcount');"/><div id='labellistcountx'></div>
+		              </div>
+		            </csp:if>
+		            </div>
+		          </td>
+		        </tr>
+			</csp:if>  <!--- end of entities section --->
+            <csp:if condition="$Get(blacklistmembers)>0">  <!---- members (blacklisted) section  --->
+		        <tr>
+		          <td>   
+	               Blacklisted members of the set : <br>
+	               <select class="input" size=#($Select($Get(blacklistmembers)>20:20,1:blacklistmembers))# multiple name="blacklistmembers">
+	                 <script language="cache" runat="server">
+	                	Set member="" For {
+		            		set member=$order(blacklistmembers(member)) If member="" Quit
+		              		write "<option value='"_member_"' selected>",member,"</option>"
+	                	}
+	                </script>
+	               </select>
+		         </td>
+		       </tr>
+            </csp:if>
+	       <csp:if condition="hidePat'=99">   <!---- general set prop section --->
+
+	         <tr><td><fieldset id="savesetsection"><legend>Save selected concepts in a Set : </legend>
+	         <table>
+	           <tr>
+	             <td><span class="label">Set name</span></td> 
+	             <td><input type="text" name="set" value="#(Set)#" class="box40" placeholder="Name of this set"/>&nbsp;</td>
+	           </tr>
+	           <tr>
+	             <td><span class="label">Description</span></td>
+	             <td><input type="text" name="setdescription" value="#(setdescription)#" class="box40" placeholder="description of this set"/></td>
+	           </tr>
+	           <tr>
+	             <td></td>
+	             <td>
+	               <label for="pEnDS"><span class="label">Enable in DeepSee</span></label>
+	               <input id="pEnDS" type="checkbox" name="sDeepseeEnabled" value=1 #($s(deepseeEnabled:"checked",1:""))#/>&nbsp;
+	               <label for="pRest"><span class="label">Enable in Rest</span></label>
+	               <input id="pRest" type="checkbox" name="sRestEnabled" value=1 #($s(restEnabled:"checked",1:""))#/>&nbsp;
+	             </td>
+	           </tr>
+		       <csp:if condition='$L(errorSave)>0'>
+	             <tr>
+	               <td colspan="2" class="error"><b>#(errorSave)#</b></td>
+	             </tr>
+	           </csp:if>
+	           <tr>
+	             <td></td><td>
+	               <button class="savebutton" type="submit" name="action" value="saveset" title="Save the set of values. Members will be calculated in the background.">saveset</button>&nbsp;
+	               <csp:if condition="$L(Set)>0">
+	                 <button type="submit" name="action" value="renameset" title="Save the set using a different name (copy)">renameset</button>
+	               </csp:if>
+	             </td>	           
+	           </tr>
+	         </table>
+	         </fieldset></td></tr>
+	         <!--- rule section --->
+	         <tr><td><fieldset id="saverulesection"><legend>Save selected concepts in Rules : </legend><table>
+	         <tr>
+	           <td><span class="label">Rule name</span></td>
+	           <td><input type="text" name="rule" value="#($Get(Rule))#" class="box40" placeholder="Rulename"/></td>
+	         </tr>
+	         <tr>
+	           <td></td><td><button type="submit" name="action" value="replacerule" title="Save the values as a rule, replacing previous values">replacerule</button>
+	             <button type="submit" name="action" value="addrule" title="Add the values to an existing rule">addrule</button>
+	           </td>
+	         </tr>
+	         </table></fieldset></td></tr>
+	         <!---  end of rule section  --->
+          
+	       </csp:if>  <!--- end of general set prop section  --->
+         </table>
+       </div>
+       <div id="formulaBlock" >
+	     <table id="tblFormulaBlock">
+	       <tr>
+	         <td colspan=5><br><i>Create a set by using a formula on existing Sets :</i></td>
+	       </tr>
+	       <tr>
+	         <td colspan=5>
+	           <table id="tblFormula">
+	             <tr><td colspan="2"></td><td>#($Get(ErrorCalc))#</td></tr>
+	             <tr>
+	               <td><span class="label">Set&nbsp;name</span></td>
+	               <td><input type="text" size="15" name="logicset" value="#($Get(logicset))#" class="box40" placeholder="Name of the set"/></td>
+	             </tr>
+	             <tr>
+	               <td><span class="label">Operation</span></td>
+	               <td colspan="2">
+	                 <select name="FormulaOperator" id="comboFormulaOperator" class="box40">
+			            <script language="cache" runat="server">
+	                     For Operator="and","or","andnot","andnotsentence","score","extract" {
+		                     Write "<option"
+		                     If $ZCVT(Operator,"U")=$Get(formulaOperator) write " selected"
+		                     Write ">",Operator,"</option>"
+	                     }
+					   </script>
+	                 </select>
+	               </td>
+	             </tr>
+	             <tr>
+	               <td><span class="label">on Set(s)</span></td>
+	               <td colspan="2">
+	                 <select name="FormulaSet"  onChange="FormulaSetChange(this)" class="box40">
+		                <option value=''>-- select to add set to formula below --</option>
+			            <script language="cache" runat="server">
+			          	Do ##class(iKnow.SetAnalysis).GetSets(projectId,.Sets,1)
+			            Set sortSet="" For {
+			            	set sortSet=$order(Sets(sortSet),1,data) If sortSet="" Quit
+			                write "<option value='"_$list(data,1)_"'>",$List(data,1),"</option>"
+			            }
+			           </script>
+	                 </select>
+	               </td>
+	             </tr>
+	             <tr>
+	               <td><span class="label">Formula</span></td>
+	               <td colspan="2"><input id="txtFormula" type="text" class="box40" name="formula" value="#($Get(formula))#" placeholder="MySet1 and MySet2"/></td>
+	             </tr>
+	             <tr class="help"><td></td><td><i>set1 and set2</i></td></tr>
+	             <tr class="help"><td></td><td><i>set1 or set2 or set3</i></td></tr>
+	             <tr class="help"><td></td><td><i>set1 andnot set2</i></td></tr>
+	             <tr class="help"><td></td><td><i>set1 andnotsentence set2</i></td></tr>
+	             <tr class="help"><td></td><td><i>score set1,set2,set3</i></td></tr>
+	             <tr class="help"><td></td><td><i>extract set1 extract_rules1</i></td></tr>
+		         <tr>
+		           <td><span class="label">Description</span></td>
+		           <td colspan="2">  <input type="text" name="setdescription" value="#(setdescription)#" class="box40" placeholder="Short description for display purposes"/>
+		           </td>
+		         </tr>
+	             <tr>
+	               <td></td>
+	               <td colspan=2>
+	                 <label for="fEnDS"><span class="label">Enable in DeepSee</span></label> <input id="fEnDS" type="checkbox" name="fDeepseeEnabled" value=1 #($s(deepseeEnabled:"checked",1:""))#/>&nbsp;
+	                 <label for="fRest"><span class="label">Enable in Rest</span></label> <input id="fRest" type="checkbox" name="fRestEnabled" value=1 #($s(restEnabled:"checked",1:""))#/>&nbsp;
+	               </td>
+	             </tr>
+	             <tr>
+	               <td></td><td>
+	                 <button type="submit" name="action" value="calculate" title="Save and caclulate the formula set">calculate</button>
+	                 <csp:if condition="$L($get(formula))>0">
+	                   <button type="submit" name="action" value="renamecalc" title="Save with a different name (copy) and calculate">renamecalc</button>
+	                 </csp:if>
+	               </td>
+	             </tr>
+	           </table>
+	         </td>
+	       </tr>
+	     </table>
+       </div>
+
+       <div id="filterBlock">
+         <table>
+           <tr><td> </td></tr>
+             <script language="cache" runat="server">
+				Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.resultFields,domainId)
+            	Set iField=""
+            	For iCount=1:1 {
+	        		Set iField=$order(resultFields(iField),1,fieldData) If iField="" Quit
+					Write "<tr>"
+					Write "<td>",$List(fieldData,2),"<input type='hidden' name='filterField",iCount,"' value='",$List(fieldData,2),"'/></td>"
+					Set Operators=$List(fieldData,3)
+					Write "<td>","<select name='filterOperator",iCount,"'>"
+					Set secondValue=0
+					For iOper=1:1:$ListLength(Operators) {
+						write "<option value='"_$List(Operators,iOper)_"'>",$list(Operators,iOper),"</option>"
+                	 	If $List(Operators,iOper)="BETWEEN" Set secondValue=1
+                	}
+                	Write "</select><td>"
+                	Write "<td><input type='text' name='filterValueA",iCount,"'/>&nbsp;"
+                	If secondValue Write "<input type='text' name='filterValueB",iCount,"'/>&nbsp;"
+                	Write "<button type='submit' name='action' value='add",iCount,"'>add</button></td>"
+					Write "</tr>"
+            	}
+             </script>
+              <csp:loop counter="iFilter" FROM="1" TO ="#(+$Get(%session.Data("filters")))#">
+                <csp:if condition='$Data(%session.Data("filters",iFilter))'>
+                  <tr>
+                    <td></td>
+                    <td>#($list(%session.Data("filters",iFilter),1)_"&nbsp;"_$list(%session.Data("filters",iFilter),2)_"&nbsp;"_$list(%session.Data("filters",iFilter),4))#&nbsp;<a href='iKnowSetAnalysis.csp?action=delfilter&filter=#(iFilter)#'>[x]</a></td>
+                  </tr>
+	            </csp:if>
+              </csp:loop>
+            </table>
+          </div>
+
+          <div id="toolsBlock" >
+            <table>
+              <tr><br>
+                <td>Recalculate all sets</td>
+	            <td><button type="submit" name="action" value="recalculate">recalculate</button></td>
+              </tr>
+              <tr>
+              <td class="help">This will calculate for each set the plugin function (handy if the iKnow domain was re-indexed), and calculates all formulas between sets.</td>
+            </tr>
+            <tr>
+              <td>Clear Temporary Results</td>
+              <td><button type="submit" name="action" value="cleartemp">cleartemp</button></td>
+            </tr>
+            <tr>
+              <td class="help">All plugins use temporary globals to store the members for each value. These globals are not needed once you finished defining your sets.</td>
+            </tr>
+            <tr>
+              <td>Clear Log</td>
+              <td><button type="submit" name="action" value="clearlog">clearlog</button></td>
+            </tr>
+            <tr>
+              <td class="help">Clears the log of previous actions in SetAnalysis.</td>
+            </tr>
+            <tr>
+              <td>Import SetAnalysis file&nbsp;<input type="text" name="filename"/></td>
+              <td><button type="submit" name="action" value="importfile">importfile</td>
+            </tr>
+            <tr>
+              <td class="help">Import a file with set definitions to generate.<br>Format of file should be : [pluginname] tab [input] tab [based_on_set_name] tab [save_as_set_name] tab [deepsee_enabled] tab [rest_enabled]</td>
+            </tr>
+            <tr>
+              <td>View Extract Table</td>
+              <td><button onclick="Popup('iKnowSetAnalysisExtract.csp');return false">extracttable</a></td>
+            </tr>
+            <tr>
+              <td class="help">View the data that is extracted with sets based on extract formulas</td>
+            </tr>
+            <tr>
+              <td>Manage Blacklists</td>
+              <td><button onclick="Popup('iKnowBlacklist.csp?domain=#(domainName)#&blacklist=');return false">blacklists</a></td>
+            </tr>
+            <tr>
+              <td class="help">Create or edit lists of concepts that you want to hide selected projects.</td>
+            </tr>
+            <csp:if condition="##class(iKnow.SetAnalysis).LogExists()">
+		      <tr>
+		        <td>Log : </td>
+                <td><button type="submit" name="action" value="refresh">refresh</button></td>
+		      </tr>
+              <tr>
+                <td>
+                  <script language="Cache" runat="server">
+                   Do ##class(iKnow.SetAnalysis).DisplayLog()
+                 </script>
+                </td>
+              </tr>
+            </csp:if>
+          </table>
+        </div>
+        <br>
+      </div>
+    </div>
+
+    <div class="right">
+      <span class="tabs">
+      <ul>
+	    <li id="tab10"><a href="iKnowSetAnalysis.csp?action=setsdetail">Detail</a></li>
+	    <li id="tab11"><a href="iKnowSetAnalysis.csp?action=setsoverview">Overview</a></li>
+	    <li id="tab12"><a href="iKnowSetAnalysis.csp?action=setstreeview">Treeview</a></li>
+  	    <li id="tab13"><a href="iKnowSetAnalysis.csp?action=setspanellookup">Lookup</a></li>
+  	    <li id="tab14"><a href="iKnowSetAnalysisDashboard.csp?action=dashboard">Dashboard</a></li>
+  	    <li id="tab15"><a href="iKnowSetAnalysisMembers.csp?action=null">Members</a></li>
+      </ul>
+    </span>
+	&nbsp;&nbsp;<a href='iKnowSetAnalysis.csp?action=refresh'><img src='refresh.png' title='refresh the page'width=16 height=16 border=0></a>
+	&nbsp;<a href='iKnowSetAnalysis.csp?CacheLogout=end'><img src='logout.png' title='logout and go to home page' border=0></a>
+    <br>  
+    <div class="sets">
+      <table>
+        <csp:if condition='RTab="panellookup"'>
+	    <csp:else>
+		  <tr>
+		    <td>
+         <!--- <button name="viewDetail" type="button" onclick="ShowView('viewDetail');">detail</button>
+          <button name="viewOverview" type="button" onclick="ShowView('viewOverview');">overview</button>
+          <button name="viewTree" type="button" onclick="ShowView('viewTree');">tree</button>
+		 --->   </td>
+		    <td colspan=3 align=right>
+		    </td>
+		  </tr>
+	    </csp:if>
+        
+
+        <csp:if condition='RTab="detail"'>
+          <tr>
+            <td colspan=5><i>Saved Set's : </i>&nbsp;
+              Filter on&nbsp;#(metadataField)#&nbsp;<input type="text" name="setfilter" value="#($Get(%session.Data("setfilter")))#"/>&nbsp;<button type="submit" name="action" value="setfilter">setfilter</button>
+            </td>
+          </tr>
+	    </csp:if>
+        <tr><td>     		           
+          <script language="cache" runat="server">
+         	Merge SessionData=%session.Data("sets")
+    		If RTab="panellookup" {
+    			&html<
+    	    	  <div class="help">This panel shows a list of <b>existing entities</b> when typing minimum 3 characters in the concept input box at the left hand side, or in the lookup input box below.</div><br>
+     			  Manual Lookup: <input type="text" name="manualLookup" onkeyup="lookupManualChange();">
+     			  <div id="lookupitems">
+     			  </div>
+    	    	>
+         	} else {
+	         	Do ##class(iKnow.SetAnalysis).OutputSets(projectId,.SessionData,$Get(%session.Data("setfilter")),RTab)
+	         	;Write "<div id='viewDetail'>"
+	         	;Do ##class(iKnow.SetAnalysis).OutputSets(projectId,.SessionData,$Get(%session.Data("setfilter")),"detail")
+    			;Write "</div>"
+	         	;Write "<div id='viewOverview'>"
+    			;Do ##class(iKnow.SetAnalysis).OutputSets(projectId,.SessionData,$Get(%session.Data("setfilter")),"overview")
+    			;Write "</div>"
+	         	;Write "<div id='viewTree'>"
+    			;Do ##class(iKnow.SetAnalysis).OutputSets(projectId,.SessionData,$Get(%session.Data("setfilter")),"treeview")
+    			;Write "</div>"
+    		}
+          </script>
+         </td></tr>
+       </table>
+     </div>
+   </div>
+ </div>
+</form>
+
+  
+ <script type="text/javascript">
+  SetInput("#(CurrentPlugin)#");
+  TabToggle('#(Tab)#');
+  TabToggle('#(RTab)#');
+  if (#(hidePat)#==1) {
+	document.getElementById("savesetsection").style.display = "none";
+  } else {
+	document.getElementById("savesetsection").style.display = "block";
+  }
+  if (#(hideList)#==1) {
+	document.getElementById("selectelementssection").style.display = "none";
+  } else {
+	document.getElementById("selectelementssection").style.display = "block";
+  }
+  if (#(hideRule)#==1) {
+	document.getElementById("saverulesection").style.display = "none";
+  } else {
+	document.getElementById("saverulesection").style.display = "block";
+  }
+  
+</script>
+</csp:if>
+
+<csp:if condition='step="choose_project"'>
+
+
+<table id="menuproject">
+  <th>
+  <td align="center">Welcome to <b>SetAnalysis</b> for <b>C</b>ohort <b>S</b>election and <b>I</b>dentification</td>
+  </th>
+</table>
+
+<br>
+<div id="header1">Please choose a project in following list:</div>
+
+
+<table id="menuproject2">
+ <tbody>
+  <csp:loop counter="iProject" FROM="1" TO ="#(+projects)#">
+   <tr onclick="window.location.href = 'iKnowSetAnalysis.csp?project=#($list(projects(iProject),2))#';">
+    <td><b>#($list(projects(iProject),2))#</b></td>
+    <td>#($list(projects(iProject),3))#</td>
+   </tr>
+  </csp:loop>
+  <csp:if condition='$system.Security.Check("SetAnalysis_CreateProject","U")'>
+   <tr onclick="window.location.href = 'iKnowSetAnalysis.csp?action=newproject';">
+    <td><b>New project</b></td>
+    <td>Create a new project</td>
+  </tr>
+  </csp:if>
+ </tbody>
+</table>
+
+</csp:if>
+ 
+<csp:if condition='step="create_project"'>
+
+  Create a new SetAnalysis Project :<br>
+  <form name="formProject" action="iKnowSetAnalysis.csp" method="post" class="main">
+  <table>
+    <tr><td colspan="2" class="error">#($Get(OkProject))#</td></tr>
+    <tr>
+      <td>Project Name : </td>
+      <td><input type="text" name="NewProjectName" size="20" value="#($Get(NewProjectName))#"/></td>
+    </tr>
+    <tr valign="top">
+      <td>Description : </td>
+      <td>
+        <textarea name="NewProjectDescription" cols="70" rows=4>#($Get(NewProjectDescription))#</textarea>
+      </td>
+    </tr>
+    <tr>
+      <td>iKnow Domain : </td>
+      <td>
+        <select name="NewProjectiKnowDomain" onChange="JavaScript:changeDomain(this);">
+	      <script language="cache" runat="server">
+      		Set DefaultValue=""
+      		Set objResult=##class(%ResultSet).%New("%iKnow.Domain:GetAllDomains")
+      		Do objResult.Execute(1)
+	  		Set domains=0
+		  	While objResult.Next() {
+			  	If ##class(iKnow.SetAnalysis.Domains).Disabled(objResult.GetData(1)) Continue
+		  		set domains=domains+1
+		  		If domains=1 Set DefaultValue=objResult.GetData(2)
+		    	Write "<option ",$Select($Get(NewProjectiKnowDomain)=objResult.GetData(2):"selected",1:""),">",objResult.GetData(2),"</option>"
+	  		}
+			If (domains=1)!($Get(NewProjectiKnowDomain)="") Set NewProjectiKnowDomain=DefaultValue
+	      </script>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td>iKnow MetaField : </td>
+      <td>
+        <select name="NewProjectiKnowMetaField" id="NewProjectiKnowMetaField">
+	      <script language="cache" runat="server">
+			If $Get(NewProjectiKnowDomain)'="" {
+				Write ..GetMetaFields(NewProjectiKnowDomain,$Get(NewProjectiKnowMetaField))
+			}
+         </script>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td>iKnow MetaField Method : </td>
+      <td>
+        <input type="text" name="NewProjectiKnowMetaFieldMethod" size="50" value="#($Get(NewProjectiKnowMetaFieldMethod))#">
+        </select>
+      </td>
+    </tr>
+<!---
+    <tr>
+      <td>iFind Index : </td>
+      <td>
+        <select name="NewProjectiFindIndex" id="NewProjectiFindIndex">
+          <script language="cache" runat="server">
+			Write ..GetiFindIndexes($Get(NewProjectiFindIndex))         
+         </script>
+        </select>
+      </td>
+    </tr>
+--->
+    <tr>
+      <td>Security Resource : </td>
+      <td>
+        <input type="text" name="NewProjectResource" size="20" value="#($Get(NewProjectResource))#"/>
+      </td>
+    </tr>
+    <tr>
+      <td valign="top">Blacklists : </td>
+      <td >
+        <select name="NewProjectBlacklists" id="NewProjectBlacklists" multiple>
+          <script language="cache" runat="server">
+			Write ..GetBlacklists($Get(NewProjectiKnowDomain),$Get(NewProjectBlacklists))         
+         </script>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td><span class="label">Public (visible for all) : </span></td>
+      <td><input type="checkbox" name="NewProjectchkPublic" value=1 #($s($Get(NewProjectchkPublic)=1:"checked",1:""))#/>&nbsp;
+    </tr>
+    <tr>
+      <td></td><td><button type="submit" name="action" Value="CreateProject">CreateProject</button>
+    </tr>
+  </table>
+</form>
+
+
+</csp:if>
+
+
+</body>
+</html>
+]]></CSP>
+</Export>

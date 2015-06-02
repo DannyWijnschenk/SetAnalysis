@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Members">
+<Super>%Persistent</Super>
+<TimeCreated>62897,65912.161847</TimeCreated>
+
+<Property name="Member">
+<Type>%String</Type>
+</Property>
+
+<Property name="Sets">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="10000"/>
+</Property>
+
+<Index name="idxMember">
+<IdKey>1</IdKey>
+<Properties>Member</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Method name="InsertSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Member,ProjectId,Set</FormalSpec>
+<Implementation><![CDATA[
+	Set UniqueSet=ProjectId_"_"_Set
+	Set objMember=##class(iKnow.SetAnalysis.Members).%OpenId(Member)
+	If objMember = "" {
+		Set objMember=##class(iKnow.SetAnalysis.Members).%New()
+		Set objMember.Member=Member
+		Set objMember.Sets=$Lb(UniqueSet)
+	} else {
+		If '$ListFind(objMember.Sets,UniqueSet) Set objMember.Sets=objMember.Sets_$Lb(UniqueSet)
+	}
+	Do objMember.%Save()
+]]></Implementation>
+</Method>
+
+<Method name="RemoveSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set</FormalSpec>
+<Implementation><![CDATA[
+	Set UniqueSet=ProjectId_"_"_Set
+	&sql(Declare C Cursor For Select Member From iKnow_SetAnalysis.Members Where $ListFind(Sets,:UniqueSet)>0)
+	&sql(Open C)
+	For {
+		&sql(Fetch C Into :Member)
+		If SQLCODE'=0 Quit
+		Set objMember=##class(iKnow.SetAnalysis.Members).%OpenId(Member)
+		Set Sets=objMember.Sets
+		Set Sets=$List(Sets,1,$ListFind(Sets,UniqueSet)-1)_$List(Sets,$ListFind(Sets,UniqueSet)+1,$ListLength(Sets))
+		Set objMember.Sets=Sets
+		Do objMember.%Save()
+		If Sets="" Do objMember.%DeleteId(Member)		
+	}
+	&sql(Close C)
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.MembersD</DataLocation>
+<DefaultData>MembersDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.MembersD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.MembersI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.MembersS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="MembersDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Identifier</Value>
+</Value>
+<Value name="3">
+<Value>Gender</Value>
+</Value>
+<Value name="4">
+<Value>DOB</Value>
+</Value>
+<Value name="5">
+<Value>Sets</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

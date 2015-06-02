@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisHighlight.css" application="/csp/setanalysis/" default="1"><![CDATA[
+.alevel100 {
+	color: #FF0000;
+	text-decoration:line-through;
+}
+
+.alevel50 {
+	color: #FF0000;
+}
+
+.alevel20 {
+	color: #660033;
+}
+
+.etype0 {
+	text-decoration:underline;
+}
+
+.etype1 {
+	font-style:oblique;
+}
+
+.etype2 {
+	font-style:italic;
+}
+
+.highlight1 {
+	font-weight:bold;
+	background-color:#CCFFFF;
+}
+
+.highlight2 {
+	font-weight:bold;
+	background-color:#FFFFCC;
+}
+
+.highlight3 {
+	font-weight:bold;
+	background-color:#99FFCC;
+}
+]]></CSP>
+</Export>

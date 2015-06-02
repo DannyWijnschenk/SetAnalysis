@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.SetKeyValues">
+<Super>%Persistent</Super>
+<TimeCreated>62956,49667.741203</TimeCreated>
+
+<Property name="SetId">
+<Type>iKnow.SetAnalysis.Sets</Type>
+</Property>
+
+<Property name="KeyId">
+<Type>%String</Type>
+</Property>
+
+<Property name="Value">
+<Type>%String</Type>
+</Property>
+
+<Property name="InSelection">
+<Description>
+0 : Not selected
+1 : Selected
+2 : New</Description>
+<Type>%Integer</Type>
+</Property>
+
+<Index name="idxSet">
+<Properties>SetId,InSelection</Properties>
+</Index>
+
+<Index name="idxKey">
+<Properties>SetId,KeyId</Properties>
+</Index>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnal4ECA.SetKeyValuesD</DataLocation>
+<DefaultData>SetKeyValuesDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnal4ECA.SetKeyValuesD</IdLocation>
+<IndexLocation>^iKnow.SetAnal4ECA.SetKeyValuesI</IndexLocation>
+<StreamLocation>^iKnow.SetAnal4ECA.SetKeyValuesS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetKeyValuesDefaultData">
+<Structure>listnode</Structure>
+<Subscript/>
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>SetId</Value>
+</Value>
+<Value name="3">
+<Value>Key</Value>
+</Value>
+<Value name="4">
+<Value>Value</Value>
+</Value>
+<Value name="5">
+<Value>InSelection</Value>
+</Value>
+<Value name="6">
+<Value>KeyId</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

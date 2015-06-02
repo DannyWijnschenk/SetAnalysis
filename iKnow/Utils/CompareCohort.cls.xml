@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.Utils.CompareCohort">
+<TimeCreated>63529,36802.017032</TimeCreated>
+
+<Method name="Test">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	Set Domain1="MEDDATASET"
+	Set Filter1=$lb($lb("Status","=","CURRENT SMOKER"),$lb("Status","=","PAST SMOKER"),$lb("Status","=","SMOKER"))
+	Set Filter2=$lb($lb("Status","=","NON-SMOKER"))
+	Set Domain2="MEDDATASET"
+	Set MetaFields=$lb("Status")
+	Set TopEntities=100  //iKnow Top # entities for each domain
+	Set Treshold=5  //Minimum Spread for each entity
+	Do ..Compare(1,Domain1,Filter1,Domain2,Filter2,MetaFields,TopEntities,Treshold)
+]]></Implementation>
+</Method>
+
+<Method name="Compare">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>CompareId,Domain1,Filter1,Domain2,Filter2,MetaFields,TopEntities,Threshold</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim DomainId as %String
+	#Dim objFilter as %iKnow.Filters.GroupFilter
+	#Dim MetaIds as %String
+
+	//1. define 2 cohorts with
+	//   Definition:
+	//   - iKnowDomain1+2
+	//   -- filters
+	//   -- blacklists
+	//   - metadata fields to be used in further BI
+	//   - Spread treshold
+	
+	Do ##class(Data.Entities).%KillExtent()
+
+	Set DomainId(1) = ..GetDomainId(Domain1) If DomainId(1)="" Quit 0
+	Set DomainId(2) = ..GetDomainId(Domain2) If DomainId(2)="" Quit 0
+
+	Set objFilter(1) = ..GetDomainFilter(DomainId(1), Filter1)
+	Set objFilter(2) = ..GetDomainFilter(DomainId(2), Filter2)
+
+	Set MetaIds(1) = ..GetMetaIds(DomainId(1), MetaFields)
+	Set MetaIds(2) = ..GetMetaIds(DomainId(2), MetaFields)
+
+	//2. Get Concepts, CRC's with min. Spread
+	//   Create class 'Entities':
+	//   -Entity : %String
+	//   -Type   : C, CRC, G
+	//   -InGroup : %String
+	//   -Spread1, Spread2 : %Integer
+	//   -Metadata1, ... : %String
+
+	Kill ^||Entities
+	Write "Get entities for Domain "_Domain1_" with filter "_Filter1_" ...",!
+	Do ..GetEntitiesType(1, DomainId(1), objFilter(1), "C", TopEntities)
+	Write "Get entities for Domain "_Domain2_" with filter "_Filter2_" ...",!
+	Do ..GetEntitiesType(2, DomainId(2), objFilter(2), "C", TopEntities)
+	Write "Get cross entities for domains ...",!
+	Do ..GetOtherEntities(.DomainId)
+
+	Write "Save entities to class ...",!
+	Do ..SaveEntities(.DomainId, .objFilter, .MetaIds)
+	 
+	//get rid of all records where both frequencies are below threshold
+	Write "Deleting entities under treshold ...",!
+	&sql(Delete From Data.Entities Where ((Spread1<:Threshold) or (Spread1 is null)) And ((Spread2<:Threshold) or (Spread2 is null)))
+
+	//3. Group of Entities (Type = G, set InGroup)
+	
+	//4. Create Cube on class Entities, Metadata1... as Dimensions, Spread1.. as Measures
+	do ##class(%DeepSee.Utils).%BuildCube("cubeEntities")
+]]></Implementation>
+</Method>
+
+<Method name="GetEntitiesType">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Order:%Integer,DomainId,objFilter,entType:%String="C",maxEnt:%Integer=500</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim sc as %Status = $$$OK
+	#Dim entResult, entData, entity as %String
+	#Dim iEntity, entId as %Integer
+	
+	If entType="C" {
+		Set sc = ##class(%iKnow.Queries.EntityAPI).GetTop(.entResult, DomainId, 1, maxEnt, objFilter, 15)  ;;add filters,....
+	} elseif entType="CRC" {
+		Set sc = ##class(%iKnow.Queries.CrcAPI).GetTop(.entResult, DomainId, 1, maxEnt, objFilter, 15)  ;;add filters,....
+	}
+	If sc'=1 Do $SYSTEM.Status.DisplayError(sc) Quit sc
+	
+	Set iEntity=""
+	For {
+		Set iEntity=$Order(entResult(iEntity),1,entData) If iEntity="" Quit
+		Set entId=$List(entData,1)
+		If entType="C" {
+			Set entity=$List(entData,2)
+		} elseif entType="CRC" {
+			Set entity=$List(entData,2,4)
+		}
+		If entity'="",$Length(entity)<512 Set ^||Entities(entType,entity,Order)=$lb(entId)
+	}
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetOtherEntities">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&DomainId]]></FormalSpec>
+<Implementation><![CDATA[
+	#Dim entity as %String
+	#Dim entType as %String
+	Set entType=""
+	For {
+		Set entType=$Order(^||Entities(entType)) if entType="" Quit
+		Set entity=""
+		For {
+			Set entity=$Order(^||Entities(entType,entity)) If entity="" Quit
+			If '$Data(^||Entities(entType,entity,1)) Do ..AddEntity(entType,entity,1, DomainId(1))
+			If '$Data(^||Entities(entType,entity,2)) Do ..AddEntity(entType,entity,2, DomainId(2))
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="AddEntity">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>entType,Entity,Order,DomainId</FormalSpec>
+<Implementation><![CDATA[
+	#Dim entId as %Integer = ""
+	If entType="C" {
+		Set entId = ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Entity)
+	} elseif entType="CRC" {
+		Set entId = ##class(%iKnow.Queries.CrcAPI).GetId($List(Entity,1),$List(Entity,2),$List(Entity,3))
+	}
+	If entId'="" Set ^||Entities(entType, Entity, Order)=$Lb(entId)
+]]></Implementation>
+</Method>
+
+<Method name="SaveEntities">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&DomainIds,&objFilters,&MetaIds]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim sc as %Status = $$$OK
+	#Dim DomainId, entId, iSrc, srcId, Order as %Integer
+	#Dim entType, entity, entData, srcData, srcResult, metaValues as %String
+	#Dim objFilter as %iKnow.Filters.GroupFilter
+	Set entType=""
+	For {
+		Set entType=$Order(^||Entities(entType)) If entType="" Quit
+		Set entity=""
+		For {
+			Set entity=$Order(^||Entities(entType,entity)) If entity="" Quit
+			Set Order=""
+			For {
+				Set Order=$Order(^||Entities(entType,entity, Order),1,entData) If Order="" Quit
+				Set DomainId=DomainIds(Order), objFilter = objFilters(Order)
+				//get all sources for this entity, and calc metadata fields
+				//for each combination : if exists in Entities : open and add freq, else create
+				Set entId=$List(entData,1)
+				If entType = "C" {
+					Do ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.srcResult, DomainId, $ListBuild(entId), 0, , objFilter)
+				} elseif entType="CRC" {
+					Do ##class(%iKnow.Queries.SourceAPI).GetByCrcIds(.srcResult, DomainId, $ListBuild(entId), 0, , objFilter)
+				}
+				Set iSrc=""
+				For {
+					Set iSrc=$Order(srcResult(iSrc),1,srcData) If iSrc="" Quit
+					Set srcId=$List(srcData,1)
+					Set metaValues = ..GetMetaValues(DomainId, srcId, MetaIds(Order))			
+					Set objEntities=##class(Data.Entities).idxUniqueOpen(entity, entType, $ListGet(metaValues,1), $ListGet(metaValues,2), $ListGet(metaValues, 3))
+					If objEntities="" {
+						Set objEntities=##class(Data.Entities).%New()
+						Set objEntities.EntityId=entId
+						Set objEntities.Entity=entity
+						Set objEntities.EntType=entType
+						Set objEntities.MetaData1=$ListGet(metaValues,1)
+						Set objEntities.MetaData2=$ListGet(metaValues,2)
+						Set objEntities.MetaData3=$ListGet(metaValues,3)
+					}
+					If Order=1 Set objEntities.Spread1 = objEntities.Spread1 + 1
+					If Order=2 Set objEntities.Spread2 = objEntities.Spread2 + 1
+					Set sc=objEntities.%Save()
+					if sc'=1 Do $SYSTEM.Status.DisplayError(sc)
+				}
+			}
+		}
+	}
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetDomainId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName:%String</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+	#Dim objDomain as %iKnow.Domain
+	Set objDomain=##class(%iKnow.Domain).Open(DomainName) If objDomain="" Quit ""
+	Quit objDomain.Id
+]]></Implementation>
+</Method>
+
+<Method name="GetDomainFilter">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId:%String,Filter:%String=""</FormalSpec>
+<ReturnType>%iKnow.Filters.GroupFilter</ReturnType>
+<Implementation><![CDATA[
+	#Dim thisFilter as %String
+	#Dim iFilter as %Integer
+	#Dim objGrpFilter as %iKnow.Filters.GroupFilter = ""
+	If Filter '= "" {
+		For iFilter = 1:1:$ListLength(Filter) {
+			Set thisFilter = $List(Filter,iFilter)
+			Set objFilter=##class(%iKnow.Filters.SimpleMetadataFilter).%New(DomainId,$List(thisFilter,1),$List(thisFilter,2),$List(thisFilter,3))
+			If objGrpFilter="" {
+				Set objGrpFilter=##class(%iKnow.Filters.GroupFilter).%New(DomainId)
+				Set objGrpFilter.GroupLogic = 2  ;OR
+			}
+			Do objGrpFilter.AddSubFilter(objFilter)
+		}
+	}
+	Quit objGrpFilter
+]]></Implementation>
+</Method>
+
+<Method name="GetMetaIds">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId,MetaFields</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#Dim iField, fieldId as %Integer
+	#Dim MetaIds as %String = ""
+	For iField=1:1:$ListLength(MetaFields) {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, $List(MetaFields, iField), .sc)
+		Set MetaIds=MetaIds_$lb(fieldId)
+	}
+	Quit MetaIds
+]]></Implementation>
+</Method>
+
+<Method name="GetMetaValues">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId,SrcId,MetaIds</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If MetaIds="" Quit ""
+	//get for each metafield the metavalue of the source
+	#Dim metaValues as %String = ""
+	#Dim iField as %Integer
+	#Dim fieldId as %String
+	For iField=1:1:$ListLength(MetaIds) {
+		Set fieldId=$List(MetaIds, iField)
+		Set metaValues=metaValues_$ListBuild(##class(%iKnow.Queries.MetadataAPI).GetValueById(DomainId, fieldId, SrcId))
+	}
+	Quit metaValues
+]]></Implementation>
+</Method>
+</Class>
+</Export>

@@ -1,0 +1,946 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.Shell">
+<Description>
+iKnow Shell lets you call the iKnow Query API's interactively in terminal using simple commands
+Version 1.3 - 14.09.2012 - danny.wijnschenk@intersystems.com</Description>
+<Abstract>1</Abstract>
+<IncludeCode>%IKPublic</IncludeCode>
+<TimeCreated>62710,42189.266385</TimeCreated>
+
+<Method name="Run">
+<Description>
+Call Run() to interactively enter commands and view the result on screen
+Give an array or a $List of commands as 1st param to execute these commands in batch
+Give an output device as 2nd param to create a file with the output</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Script:%String,Device:%String=""</FormalSpec>
+<Implementation><![CDATA[
+	New %device, %currentfilter, %currentfilterdesc, %domainid, %domainname, %field, %fieldid, %page
+	New %pagesize, %set, %iscript
+	Set %device=Device
+	Write:%device="" "iKnow Shell - enter '?' for help",!
+	Do ..Init(.Script)
+	For {
+		Do ..ReadCommand(.Script, .CommandLine)
+		Set Command=$zcvt($Piece(CommandLine," ",1),"l")
+		Set Param=$Piece(CommandLine," ",2,99)
+		If (Command="?")!(Command="help") Do ..CommandHelp() Continue
+		If (Command="quit")!(Command="q")!(Command="exit") Quit
+		If (Command="domain")!(Command="dom") Do ..CommandDomain(Param) Continue
+		If (Command="page")!(Command="p") Do ..CommandPage(Param) Continue
+		If (Command="pagesize")!(Command="ps") Do ..CommandPagesize(Param) Continue
+		If (Command="set") Do ..CommandSet(Param) Continue
+		If (Command="use") Do ..CommandUse(Param) Continue
+		If (Command="filter")!(Command="f") Do ..CommandFilter(Param) Continue
+		If (Command="source")!(Command="s") Do ..CommandSource(Param) Continue
+		If (Command="metadata")!(Command="meta") Do ..CommandMetadata(Param) Continue
+		If (Command="field") Do ..CommandField(Param) Continue
+		If (Command="summary")!(Command="sum") Do ..CommandSummary(Param) Continue
+		If (Command="clear")!(Command="c") Do ..CommandClear(Param) Continue
+		If (Command="similar")!(Command="sim") Do ..CommandSimilar(Param) Continue
+		If (Command="related")!(Command="rel") Do ..CommandRelated(Param) Continue
+		If (Command="crc") Do ..CommandCrc(Param) Continue
+		If (Command="top") Do ..CommandTop(Param) Continue
+		If (Command="device") Do ..CommandDevice(Param) Continue
+		Write:%device="" "Command does not exist",!
+	}
+	Write:%device="" "Bye...",!
+	If %device'="" Close %device
+]]></Implementation>
+</Method>
+
+<Method name="ReadCommand">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Script,CommandLine:%String</FormalSpec>
+<Implementation><![CDATA[
+	If '$Data(Script) {
+		Use 0 Read "iKnow> ",CommandLine Write !
+		If %device'="" Use %device
+	} elseif $ListValid(Script) {
+		If '$ListNext(Script, %iscript, CommandLine) {
+			Set CommandLine = "quit"
+		}		
+	} else {
+		Set %iscript=$Order(Script(%iscript),1,CommandLine)
+		If %iscript="" set CommandLine = "quit"
+	}
+]]></Implementation>
+</Method>
+
+<Method name="Init">
+<Description>
+if only one iKnow domain in namespace, use it</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Script</FormalSpec>
+<Implementation><![CDATA[
+	Do ..UseDevice(.%device)
+
+	Set (%domainid,%domainname)=""
+	Set %page=1,%pagesize=10
+	Kill %setfilter Set (%set,%currentfilter,%currentfilterdesc)=""
+	set (%field,%fieldid)=""
+	Set %iscript=$Select('$Data(Script):"",$ListValid(Script):0,1:"")
+	Set objResult=##class(%ResultSet).%New("%iKnow.Domain:GetAllDomains")
+	Do objResult.Execute(1)
+	Set domainid=""
+	If objResult.Next() {
+		Set domainid=objResult.GetData(1)
+		If objResult.Next() set domainid=""  ;more than one
+	}
+	If domainid'="" Do ..CommandDomain(domainid)
+]]></Implementation>
+</Method>
+
+<Method name="CommandHelp">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	Write "Help : ",!
+	Write "-------",!
+	Write !
+	Write "q[uit]              : exit the shell",!
+	Write "dom[ain]            : show all domainnames and id's for namespace ",$ZNSPACE,!
+	Write "dom[ain] <n>        : use domain with DomainId = <n>",!
+	Write "dom[ain] <d>        : use domain with DomainName = <d>",!
+	Write "[p]age <n>          : set page parameter = <n>",!
+	Write "[p]age[s]ize <n>    : set pagesize parameter = <n>",!
+    Write "sim[ilar] <e>       : show similar entities for entity <e>",!
+    Write "rel[ated] <e>       : show related entities for entity <e>",!
+    Write "top                 : show top entities",!
+    Write "top <s>             : show top entities for set <s>",!
+    Write "f[ilter]              (list of commands to set filters)",!
+    Write "   entity <e>       : add filter for entity <e> in current set",!
+    Write "   similar <e>      : add filter for all similar entities <e> in current set",!
+    Write "   crc <c>\<r>\<c>  : add filter for concept\relation\concept in current set",!
+    Write "   path <e>\<e>\... : add filter for paths containing all entities",!
+    Write "   [meta]data <f> <oper> <v1> <v2> : add filter on metadata field <f>",!
+    Write "                                     (e.g. filter metadata x = 1)",!
+    Write "set                 : show list of sets with filters",!
+    Write "set <s>             : save current filter(s) as set <s>",!
+    Write "set <s0>=<S1> or <s2> : boolean logic with sets to make new sets",!
+    Write "                        use combination of 'or', 'and', 'not'",!    
+    Write "use <s>             : use set <s> as current set",!
+    Write "s[ource] list       : list sources for current set",!
+    Write "s[ource] list <s>   : list sources for set <s>",!
+    Write "s[ource] count      : show count sources for current set",!
+    Write "s[ource] count <s>  : show count sources for set <s>",!
+	Write "s[ource] <n>        : view source with id = <n>",!
+	Write "sum[mary] <n> <l>   : view summary for source with id = <n>, (<l> lines)",!
+	Write "[meta]data          : show metadata fields",!
+	Write "[meta]data <f>      : show unique values for metadata field <f> for current set",! 
+	Write "[meta]data <f> <s>  : show unique values for metadata field <f> for set <s>",! 
+    Write "field <f>           : set metadata fields to <f> (to display in source list)",!
+    Write "c[lear]             : clear filters for current set",!
+    Write "c[lear] <s>         : clear filters for set <s>",!
+    Write "device              : show current output device",!
+    Write "device <file>       : set current output device to file <file>",!
+    Write "device 0            : set current output device to terminal",!
+]]></Implementation>
+</Method>
+
+<Method name="CommandDomain">
+<Description>
+domain list
+domain nnn (domainid)
+domain aaa (domainname)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		Set domainid=""
+		Write ?1,"DomainId",?10,"DomainName",!
+		Set objResult=##class(%ResultSet).%New("%iKnow.Domain:GetAllDomains")
+		Do objResult.Execute(1)
+		While objResult.Next() {
+			Write ?1,objResult.GetData(1),?10,objResult.GetData(2)
+			If objResult.GetData(1)=%domainid Write ?30," --> current domain"
+			Write !
+		}
+	} elseif Param?1.N {
+		Set objDomain=##class(%iKnow.Domain).OpenId(Param)
+		If objDomain="" Write:%device="" "domainid '",Param,"' does not exist",! Quit
+		Set %domainid=Param
+		Set %domainname=objDomain.Name
+		Write:%device="" "using domain '",%domainname, "', id '",%domainid,"'",!
+	} else {
+		Set objDomain=##class(%iKnow.Domain).Open(Param)
+		If objDomain="" Write "domainname '",Param,"' does not exist",! Quit
+		Set %domainid=objDomain.Id
+		Set %domainname=objDomain.Name
+		Write:%device="" "using domain '",%domainname, "', id '",%domainid,"'",!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandPage">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		Write "page = ",%page,!
+	} else {
+		Set %page=$Select(Param="":1,1:Param)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandPagesize">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		Write "pagesize = ",%pagesize,!
+	} else {
+		Set %pagesize=$Select(Param="":10,1:Param)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandUse">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		set %set=""
+	} else {
+		If '$Data(%setfilter(Param)) Write "Set '",Param,"' does not exist, enter 'set' to show defined sets",! Quit
+		set %set=Param
+		Kill %currentfilterdesc
+		Set %currentfilter=%setfilter(%set,"f")
+		Merge %currentfilterdesc=%setfilter(%set,"d")
+
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		Set set=""
+		For iSet=0:1 {
+			Set set=$Order(%setfilter(set)) If set="" Quit
+			Write "Set '",set,"'"
+			If set=%set write "(current)"
+			Set filter=""
+			For iFilter=0:1 {
+				set filter=$Order(%setfilter(set,"d",filter)) if filter="" Quit
+				Write ?30,%setfilter(set,"d",filter),!
+			}
+			if 'iFilter write ?30,"(no filters defined)",!
+		}
+		if 'iSet write "(no sets defined)",!
+		If %currentfilter'="",%set="" {
+			Write "Currentfilter"
+			Set filter=""
+			For iFilter=0:1 {
+				set filter=$Order(%currentfilterdesc(filter)) if filter="" Quit
+				Write ?30,%currentfilterdesc(filter),!
+			}
+		}
+	
+	} elseif Param?1.E1"="1.E {
+		Do ..Formula($TR($P(Param,"=",1)," "),$P(Param,"=",2))
+		Do ..CommandUse($P(Param,"=",1))
+	} else {
+		Do ..CopyCurrentFilter(Param)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CopyCurrentFilter">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Set</FormalSpec>
+<Implementation><![CDATA[
+		Set %set=Set
+		Kill %setfilter(%set)
+		Set %setfilter(%set,"f")=%currentfilter
+		Merge %setfilter(%set,"d")=%currentfilterdesc
+]]></Implementation>
+</Method>
+
+<Method name="CommandFilter">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	If $Piece(Param," ",1)="" Write:%device="" "use 'filter entity aaa' or 'filter similar aaa'",! Quit
+	If $Piece(Param," ",1)="entity" Do ..CommandFilterEntity($Piece(Param, " ", 2, 99)) Quit
+	If $Piece(Param," ",1)="similar" Do ..CommandFilterSimilar($Piece(Param, " ", 2, 99)) Quit
+	If $Piece(Param," ",1)="crc" Do ..CommandFilterCRC($Piece(Param, " ", 2, 99)) Quit
+	If ($Piece(Param," ",1)="metadata")!($Piece(Param," ",1)="meta") Do ..CommandFilterMetadata($Piece(Param," ",2, 99)) Quit
+	If $Piece(Param," ",1)="path" Do ..CommandFilterPath($Piece(Param, " ", 2, 99)) Quit
+	;todo : filter [meta
+]]></Implementation>
+</Method>
+
+<Method name="CommandFilterEntity">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If ##class(%iKnow.Queries.EntityAPI).GetId(%domainid, Param)="" Write:%device="" "entity '",Param,"' does not exist",! Quit
+	If Param'="" {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntities(.result, %domainid, $lb(Param), 0)
+		If 'sc Do:%device="" $SYSTEM.OBJ.DisplayError(sc) Write:%device="" ! Quit
+		Set sources=""
+		Set iSrc=""
+		For {
+			Set iSrc=$Order(result(iSrc),1,data) Quit:iSrc=""
+			Set sources=sources_$lb($list(data,1))
+		}
+		Set filter=##class(%iKnow.Filters.SourceIdFilter).%New(%domainid,sources)
+		Write "count for entity '",Param,"' is ",$ll(sources),!
+		If %currentfilter="" {
+			Set %currentfilter=##class(%iKnow.Filters.GroupFilter).%New(%domainid)
+			Set %currentfilterdesc=""
+		}
+		Do %currentfilter.AddSubFilter(filter)
+		Set %currentfilterdesc($I(%currentfilterdesc))="filter entity "_Param
+		If %set'="" Do ..CopyCurrentFilter(%set)
+
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandFilterPath">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	Set entList=$ListFromString(Param, "\")
+	Set errEntity=0
+	For iEnt=1:1:$ll(entList) {
+		If ##class(%iKnow.Queries.EntityAPI).GetId(%domainid, $List(entList, iEnt))="" {
+			Write:%device="" "entity '",$List(entList, iEnt),"' does not exist",!
+			Set errEntity=1
+		}
+	}
+	If errEntity Quit
+	If $ListLength(entList)>0 {
+		Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.result, %domainid, entList, 0, 0, , 2)
+		If 'sc Do:%device="" $SYSTEM.OBJ.DisplayError(sc) Write:%device="" ! Quit
+		Set sources=""
+		Set iPath=""
+		For {
+			Set iPath=$Order(result(iPath),1,data) Quit:iPath=""
+			set srcId=##class(%iKnow.Queries.PathAPI).GetSourceId(%domainid, $List(data,1))
+			If '$listFind(sources,srcId) Set sources=sources_$lb(srcId)
+		}
+		Set filter=##class(%iKnow.Filters.SourceIdFilter).%New(%domainid,sources)
+		Write "count for path '",Param,"' is ",$ll(sources),!
+		zw sources
+		If %currentfilter="" {
+			Set %currentfilter=##class(%iKnow.Filters.GroupFilter).%New(%domainid)
+			Set %currentfilterdesc=""
+		}
+		Do %currentfilter.AddSubFilter(filter)
+		Set %currentfilterdesc($I(%currentfilterdesc))="filter entity "_Param
+		If %set'="" Do ..CopyCurrentFilter(%set)
+
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandFilterSimilar">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If Param'="" {
+		Kill ^||Sources
+		Set sc = ##class(%iKnow.Queries.EntityAPI).GetSimilar(.resultSim, %domainid, Param, 0)
+		If 'sc Do:%device="" $SYSTEM.OBJ.DisplayError(sc) Write:%device="" ! Quit
+		Set iEnt=""
+		For  {
+			set iEnt=$Order(resultSim(iEnt),1,data) Quit:iEnt=""
+			set Entity=$List(data,2)
+			Do ##class(%iKnow.Queries.SourceAPI).GetByEntities(.result, %domainid, $lb(Entity), 0)
+			Set iSrc=""
+			For {
+				Set iSrc=$Order(result(iSrc),1,data) Quit:iSrc=""
+				Set ^||Sources($list(data,1))=""
+			}
+		}
+		
+		set sources=""
+		Set iSrc=""
+		For {
+			Set iSrc=$Order(^||Sources(iSrc)) Quit:iSrc=""
+			Set sources=sources_$lb(iSrc)
+		}
+		Set filter=##class(%iKnow.Filters.SourceIdFilter).%New(%domainid,sources)
+		Write "count for similars '",Param,"' is ",$ll(sources),!
+		If %currentfilter="" {
+			Set %currentfilter=##class(%iKnow.Filters.GroupFilter).%New(%domainid)
+			Set %currentfilterdesc=""
+		}
+		Do %currentfilter.AddSubFilter(filter)
+		Set %currentfilterdesc($I(%currentfilterdesc))="filter similar "_Param
+		If %set'="" Do ..CopyCurrentFilter(%set)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandFilterCRC">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	Set C1=$P(Param,"\",1)
+	Set R=$P(Param,"\",2)
+	Set C2=$P(Param,"\",3)
+	If C1'="",##class(%iKnow.Queries.EntityAPI).GetId(%domainid, C1)="" Write:%device="" "entity '",C1,"' does not exist",! Quit
+	If C2'="",##class(%iKnow.Queries.EntityAPI).GetId(%domainid, C2)="" Write:%device="" "entity '",C2,"' does not exist",! Quit
+
+	If R="" {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByCrcMask(.result,%domainid,C1,,C2, 0)
+	} elseIf C1="" {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByCrcMask(.result,%domainid,,R,C2, 0)
+	} elseif C2="" {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByCrcMask(.result,%domainid,C1,R,, 0)
+	} else {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByCrcMask(.result,%domainid,C1,R,C2, 0)
+	}
+	If 'sc Do:%device="" $SYSTEM.OBJ.DisplayError(sc) Write:%device="" ! Quit
+	Set sources=""
+	Set iSrc=""
+	For {
+		Set iSrc=$Order(result(iSrc),1,data) Quit:iSrc=""
+		Set sources=sources_$lb($list(data,1))
+	}
+	Set filter=##class(%iKnow.Filters.SourceIdFilter).%New(%domainid,sources)
+	Write "count for entity '",Param,"' is ",$ll(sources),!
+	If %currentfilter="" {
+		Set %currentfilter=##class(%iKnow.Filters.GroupFilter).%New(%domainid)
+		Set %currentfilterdesc=""
+	}
+	Do %currentfilter.AddSubFilter(filter)
+	Set %currentfilterdesc($I(%currentfilterdesc))="filter entity "_Param
+	If %set'="" Do ..CopyCurrentFilter(%set)
+]]></Implementation>
+</Method>
+
+<Method name="CommandFilterMetadata">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	Set field=$Piece(Param," ",1)
+	Set fieldid=##class(%iKnow.Queries.MetadataAPI).GetFieldId(%domainid, field, .sc)
+	If ('sc)!(fieldid="") Write "Metadata field '",field,"' does not exist, use 'metadata' to get a list of possible metadatfields",! Quit
+	Set oper=$Piece(Param," ",2)
+	If oper="BETWEEN" {
+		Set value=$Piece(Param," ",3)_$$$MDVALSEPARATOR_$Piece(Param," ",4)
+	} else {
+		Set value=$Piece(Param," ",3,99)
+	}
+	Set filter=##class(%iKnow.Filters.SimpleMetadataFilter).%New(%domainid,field,oper,value)
+	If %currentfilter="" {
+		Set %currentfilter=##class(%iKnow.Filters.GroupFilter).%New(%domainid)
+		Set %currentfilterdesc=""
+	}
+	Do %currentfilter.AddSubFilter(filter)
+	Set %currentfilterdesc($I(%currentfilterdesc))="filter Metadata "_Param
+	If %set'="" Do ..CopyCurrentFilter(%set)
+]]></Implementation>
+</Method>
+
+<Method name="CommandSimilar">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	If Param'="" {
+		Do ##class(%iKnow.Queries.EntityAPI).GetSimilar(.result, %domainid, Param, %page, %pagesize)
+		Do ..ShowResult(.result,"entities")
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandRelated">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	If Param'="" {
+		Do ##class(%iKnow.Queries.EntityAPI).GetRelated(.result, %domainid, Param, %page, %pagesize)
+		Do ..ShowResult(.result,"entities")
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandCrc">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	If Param'="" {
+		Do ##class(%iKnow.Queries.CrcAPI).GetByEntities(.result, %domainid, $lb(Param), %page, %pagesize)
+		Do ..ShowResult(.result,"crc")
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandTop">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ParamSet</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	If ParamSet = "" {
+		If %set="" {
+			Do ##class(%iKnow.Queries.EntityAPI).GetTop(.result, %domainid, %page, %pagesize, %currentfilter, 15)
+			Do ..ShowResult(.result,"entities")
+		} else {
+			Do ##class(%iKnow.Queries.EntityAPI).GetTop(.result, %domainid, %page, %pagesize, %setfilter(%set,"f"), 15)
+			Do ..ShowResult(.result,"entities")
+		}
+	} else {
+		If '$Data(%setfilter(ParamSet)) {
+			Write:%device="" "set '",ParamSet,"' does not exist",!
+		} else {
+			Do ##class(%iKnow.Queries.EntityAPI).GetTop(.result, %domainid, %page, %pagesize, %setfilter(ParamSet,"f"), 15)
+			Do ..ShowResult(.result,"entities")
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandSource">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	Set ParamCommand=$Piece(Param," ",1)
+	
+	If ParamCommand="list" Do ..CommandSourceList($Piece(Param," ",2)) Quit
+	If ParamCommand="count" Do ..CommandSourceCount($Piece(Param," ",2)) Quit
+	If ParamCommand?1.N Do ..CommandSourceView(ParamCommand) Quit
+]]></Implementation>
+</Method>
+
+<Method name="CommandSourceList">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ParamSet:%String</FormalSpec>
+<Implementation><![CDATA[
+	If ParamSet="" {
+		If %set="" {
+			;show total list
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.result, %domainid, %page, %pagesize, %currentfilter)
+			Do ..ShowSourceMD(.result)
+		} else {
+			;show list of current set
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.result, %domainid, %page, %pagesize, %setfilter(%set,"f"))
+			Do ..ShowSourceMD(.result)
+		}
+		
+	} else {
+		If '$Data(%setfilter(ParamSet)) {
+			Write:%device="" "set '",ParamSet,"' does not exist",!
+		} else {
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.result, %domainid, %page, %pagesize, %setfilter(ParamSet,"f"))
+			Do ..ShowSourceMD(.result)
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandSourceCount">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ParamSet:%String</FormalSpec>
+<Implementation><![CDATA[
+	If ParamSet="" {
+		;show count of current set
+		If %set="" {
+			;show total count
+			Set count=##class(%iKnow.Queries.SourceAPI).GetCountByDomain(%domainid, %currentfilter)
+			Write "total count domain = ",count,!
+		} else {
+			;show count of current set
+			Set count=##class(%iKnow.Queries.SourceAPI).GetCountByDomain(%domainid, %setfilter(%set,"f"))
+			Write "total count set '",%set,"' = ",count,!
+		}
+	} else {
+		If '$Data(%setfilter(ParamSet,"f")) {
+			Write:%device="" "set '",ParamSet,"' does not exist",!
+		} else {
+			Set count=##class(%iKnow.Queries.SourceAPI).GetCountByDomain(%domainid, %setfilter(ParamSet,"f"))
+			Write "total count set '",ParamSet,"' = ",count,!
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandSourceView">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If Param'="" {
+		Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.result, %domainid, Param, %page, %pagesize)
+		Set iCount=""
+		For {
+			Set iCount=$Order(result(iCount),1,data) If iCount="" Quit
+			Write $List(data,2),!
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandSummary">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If Param'="" {
+		Do ##class(%iKnow.Queries.SourceAPI).GetSummary(.result, %domainid, $Piece(Param, " ",1), $Select(+$Piece(Param," ",2)=0:%pagesize,1:$Piece(Param," ",2)) )
+		Set iCount=""
+		For {
+			Set iCount=$Order(result(iCount),1,data) If iCount="" Quit
+			Write $List(data,2),!
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandField">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	Set fieldid = ##class(%iKnow.Queries.MetadataAPI).GetFieldId(%domainid, Param, .sc)
+	If sc=1 {
+		Set %field=Param
+		Set %fieldid=fieldid
+	} else {
+		Write:%device="" "metadata field '",Param,"' does not exist, enter 'metadata' to view the list",!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandMetadata">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If %domainid="" Write:%device="" "please enter domain first (domain DomainName or domain nnn)",! Quit
+	If Param="" {
+		Do ..CommandMetadataList(Param)
+	} elseif %currentfilter="" {
+		Do ..CommandMetadataViewAll(Param)
+	} else {
+		Do ..CommandMetadataView(Param)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandMetadataList">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.result, %domainid)
+	Do ..ShowResult(.result,"metadata")
+]]></Implementation>
+</Method>
+
+<Method name="CommandMetadataViewAll">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set fieldid=##class(%iKnow.Queries.MetadataAPI).GetFieldId(%domainid, Param, .sc)
+	If ('sc)!(fieldid="") Write "Field '",Param,"' does not exist, use 'metadata' for a complete list of metadata fields",! Quit
+	Do ##class(%iKnow.Queries.MetadataAPI).GetFieldValues(.result, %domainid, Param, %page, %pagesize)
+
+	Set datatype=..GetFieldDT(fieldid)
+
+	Set iCount=""
+	For {
+		Set iCount=$Order(result(iCount)) Quit:iCount=""
+		Write ..FieldValue($list(result(iCount),1),datatype),!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandMetadataView">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If $Piece(Param," ",2)="" {
+		If %set="" {
+			;show total list
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.result, %domainid, %page, %pagesize, %currentfilter)
+			Do ..ShowMDField(.result, $Piece(Param," ",1))
+		} else {
+			;show list of current set
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.result, %domainid, %page, %pagesize, %setfilter(%set,"f"))
+			Do ..ShowMDField(.result, $Piece(Param," ",1))
+		}
+		
+	} else {
+		If '$Data(%setfilter($Piece(Param," ",2))) {
+			Write:%device="" "set '",$Piece(Param," ",2),"' does not exist",!
+		} else {
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.result, %domainid, %page, %pagesize, %setfilter($Piece(Param," ",2),"f"))
+			Do ..ShowMDField(.result, $Piece(Param," ",1))
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandClear">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		Set %currentfilter=""
+		Kill %currentfilterdesc
+		Set %currentfilterdesc=""
+		set %set=""
+	} else {
+		Kill %setfilter(Param)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CommandDevice">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Param:%String</FormalSpec>
+<Implementation><![CDATA[
+	If Param="" {
+		Use 0 Write "Current output device is ",$S(%device="":"terminal",1:%device),!
+		If %device'="" Use %device
+	} else {
+		Set %device=$S(Param=0:"",Param="terminal":"",1:Param)
+		Do ..UseDevice(.%device)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="UseDevice">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>%device</FormalSpec>
+<Implementation><![CDATA[
+	If %device'="" {
+		Open %device:("WNS"):0 Else  Use 0 Write "Could not open device ",%device,! Set %device=""
+		If %device'="" Use %device
+	}
+]]></Implementation>
+</Method>
+
+<Method name="ShowResult">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Result,Type</FormalSpec>
+<Implementation><![CDATA[
+	If Type="entities" {
+		If %device="" {
+			Write ?1,"  #",?5,"Id",?15,"Entity",?50,"frequency",?60,"   spread",!
+			Write ?1,"  -",?5,"--",?15,"------",?50,"---------",?60,"---------",!
+		} else {
+			Write "#",$C(9),"Id",$C(9),"Entity",$C(9),"frequency",$C(9),"spread",!
+		}
+	} elseif Type="crc" {
+		If %device="" {
+			Write ?1,"  #",?5,"Id",?15,"Concept|Relation|Concept",?60,"frequency",?70,"   spread",!
+			Write ?1,"  -",?5,"--",?15,"------------------------",?60,"---------",?70,"---------",!
+		} else {
+			Write "#",$C(9),"Id",$C(9),"CRC",$C(9),"frequency",$C(9),"spread",!
+		}
+	} elseif Type="metadata" {
+		If %device="" {
+			Write ?1," #",?4,"Id",?8,"Field",?25,"Operators",?60,"Datatype",?70,"Index",!
+			Write ?1," -",?4,"--",?8,"-----",?25,"---------",?60,"--------",?70,"-----",!
+		} else {
+			Write "#",$C(9),"Id",$C(9),"Field",$C(9),"Operators",$C(9),"Datatype",$C(9),"Index",!
+		}
+	}
+	Set iCount=""
+	For {
+		Set iCount=$Order(Result(iCount),1,data)
+		If iCount="" Quit
+		If Type="entities" {
+			Write:%device="" ?1
+			Write $J(iCount,3)
+			Write:%device="" ?5 Write:%device'="" $C(9)
+			Write $List(data,1)
+			Write:%device="" ?15 Write:%device'="" $C(9)
+			Write $List(data,2)
+			Write:%device="" ?50 Write:%device'="" $C(9)
+			Write $J($List(data,3),9)
+			Write:%device="" ?60 Write:%device'="" $C(9)
+			Write $J($List(data,4),9),!
+		} elseif Type="crc" {
+			Write:%device="" ?1
+			Write $J(iCount,3)
+			Write:%device="" ?5 Write:%device'="" $C(9)
+			Write $List(data,1)
+			Write:%device="" ?15 Write:%device'="" $C(9)
+			Write $List(data,2),"|",$List(data,3),"|",$List(data,4)
+			Write:%device="" ?60 Write:%device'="" $C(9)
+			Write $J($List(data,5),9)
+			Write:%device="" ?70 Write:%device'="" $C(9)
+			Write $J($List(data,6),9),!
+		} elseif Type="metadata" {
+			Write ?1
+			Write $J(iCount,2)
+			Write:%device="" ?4 Write:%device'="" $C(9)
+			Write $List(data,1)
+			Write:%device="" ?8 Write:%device'="" $C(9)
+			Write $List(data,2)
+			Write:%device="" ?25 Write:%device'="" $C(9)
+			For iOp=1:1:$ll($list(data,3)) write $List($List(data,3),iOp)," " if %device="",$X>59 w !?25
+			Write:%device="" ?60 Write:%device'="" $C(9)
+			write $List(data,4)
+			Write:%device="" ?70 Write:%device'="" $C(9)
+			write $List(data,5),!
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="ShowMDField">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>result,field</FormalSpec>
+<Implementation><![CDATA[
+	Set fieldid=##class(%iKnow.Queries.MetadataAPI).GetFieldId(%domainid, field, .sc)
+	If ('sc)!(fieldid="") Write "Field '",field,"' does not exist, use 'metadata' for a complete list of metadata fields",! Quit
+	Kill ^||Temp
+	Set iSource=""
+	For  {
+		Set iSource=$Order(result(iSource),1,data) Quit:iSource=""
+		Set Value = ##class(%iKnow.Queries.MetadataAPI).GetValueById(%domainid, fieldid, $list(data,1))
+		If Value'="" Set ^||Temp(Value)=""
+	}
+
+	Set datatype=..GetFieldDT(fieldid)
+
+	Set Value=""
+	For {
+		Set Value=$Order(^||Temp(Value)) Quit:Value=""
+		Write ..FieldValue(Value, datatype),!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="ShowSourceMD">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>result</FormalSpec>
+<Implementation><![CDATA[
+	If %device="" {
+		Write ?1,"Int.SourceId",?15,"Ext.SourceId"
+		If %fieldid'="" Write ?40," ",%field
+		Write !
+		Write ?1,"------------",?15,"------------"
+		If %fieldid'="" Set temp="",$P(temp,"-",$l(%field)+1)="" Write ?40," ",temp
+		Write !
+	} else {
+		Write "Int.SourceId",$C(9),"Ext.SourceId"
+		If %fieldid'="" Write $C(9),%field
+		Write !
+	}
+
+	If %fieldid'="" Set datatype=..GetFieldDT(%fieldid)
+
+	Set iSrc=""
+	For  {
+		Set iSrc=$Order(result(iSrc), 1, data) If iSrc="" Quit
+		Write:%device="" ?1
+		Write $List(data,1)
+		Write:%device="" ?15 Write:%device'="" $C(9)
+		Write $List(data,2)
+		If %fieldid'="" {
+			Set Value = ##class(%iKnow.Queries.MetadataAPI).GetValueById(%domainid, %fieldid, $list(data,1), .sc)
+			Write:%device="" ?40," " Write:%device'="" $C(9)
+			Write ..FieldValue(Value, datatype)
+		}
+		Write !
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetFieldDT">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>FieldId</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set data=$Get(^ISC.IK.Mdt.FieldId(%domainid, FieldId))
+	Quit $Select(data="":"",1:$list(data,3))
+]]></Implementation>
+</Method>
+
+<Method name="FieldValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Value,Datatype</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set FieldValue=Value
+	If Datatype="DATE" {
+		Set FieldValue=$ZDate(Value, 4,,,,,,,"")
+		If $P(Value,",",2)'="" Set FieldValue=FieldValue_" - "_$ZTime($P(Value,",",2))
+	}
+	Quit FieldValue
+]]></Implementation>
+</Method>
+
+<Method name="Formula">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Set,Formula:%String</FormalSpec>
+<Implementation><![CDATA[
+	
+	Set Formula=Formula_" "  ;so we will process last set in the loop @ ' '
+	Set Prev="",Error="",Negate=0,Level=1,(First,Next)=""
+	For iForm=1:1:$Length(Formula) {
+		Set Char=$E(Formula,iForm)
+		If (Char=" ")!(Char="(")!(Char=")"),Prev'="" {
+			If $Data(%setfilter(Prev)) {
+				Set form(Prev)=Level
+				If First="" {
+					Set First=%setfilter(Prev,"f")
+					If Negate {
+						Set filter=##class(%iKnow.Filters.GroupFilter).%New(%domainid, $$$GROUPFILTERAND, 1)
+						Do filter.AddSubFilter(First)
+						Set First=filter
+					}
+				} else {
+					Set Next=%setfilter(Prev,"f")
+					If Negate {
+						Set filter=##class(%iKnow.Filters.GroupFilter).%New(%domainid, $$$GROUPFILTERAND, 1)
+						Do filter.AddSubFilter(Next)
+						Set Next=filter
+					}
+					Set filter = ##class(%iKnow.Filters.GroupFilter).%New(%domainid, $Select(Oper="AND":$$$GROUPFILTERAND,1:$$$GROUPFILTEROR), 0)
+					Do filter.AddSubFilter(First)
+					Do filter.AddSubFilter(Next)
+					Set First=filter
+					Set Oper=""
+					Set Next=""
+				}
+					
+				Set Prev="",Negate=0 ;todo : not (...)
+			} else {
+				Set Error = "'"_Prev_"' is not a Set"
+				Quit
+			}
+		}
+		If (Char="(") ! (Char=")") {
+			;process ( )
+			If Char = "(" Set Level=Level+1
+			If Char = ")" Set Level=Level-1
+			Set Error= "Brackets are not (yet) allowed in this version"
+			Quit
+		} elseif Char=" " {
+			;is Prev defined as set
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+2),"U")=" OR " {
+			Set iForm=iForm+1
+			Set Oper="OR"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+3),"U")=" AND " {
+			Set iForm=iForm+2
+			Set Oper="AND"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+3),"U")=" NOT " {
+			Set iForm=iForm+2
+			Set Negate=1
+		} else {
+			Set Prev=Prev_Char
+		}
+	}
+	
+	If Error'="" Write Error,!
+	Kill %setfilter(Set)
+	Set %setfilter(Set,"f")=First
+	Set %setfilter(Set,"d",$i(%setfilter(Set,"d")))=Formula
+]]></Implementation>
+</Method>
+</Class>
+</Export>

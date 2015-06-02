@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisExport.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+
+<title>Export</title>
+<script language="Cache" method="OnPreHTTP" arguments="" returntype="%Boolean"> 
+    Set %response.ContentType = "application/vnd.ms-excel" 
+    Quit 1
+</script>
+
+<script language="Cache" method="ExportMembers" arguments="projectId, Set" returntype="">
+    Set Params=$Get(^iKnow.SetAnalysis)
+	write "<table>"
+	write "<tr><td>",Set,"</td>"
+	If (metadataField="sourceid")!(action="exportall") {
+		write "<td>Ext.SourceId</td>"
+		Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.resultFields, domainId)
+		Set iField="" For {
+			Set iField=$Order(resultFields(iField)) If iField="" Quit
+			Write "<td>",$List(resultFields(iField),2),"</td>"
+		}  
+	}
+	Write "</tr>"
+	
+	Set iPat="" For  {
+		Set iPat=$Order(^iKnow.SetAnalysis(projectId,Set,"P",iPat)) If iPat="" Quit
+		write "<tr><td>"
+		Write iPat,"</td>"
+		if action="exportall" { // get all sources for this iPat member, and for each source get all metadata
+			Set SrcId=""
+			For iRow=0:1 {
+				Set SrcId=$Order(^iKnow.SetAnalysis(projectId,Set,"P",iPat,SrcId)) If SrcId="" Quit
+				Set ExtId = ##class(%iKnow.Queries.SourceAPI).GetExternalId(domainId, SrcId)
+				If iRow Write "<tr><td></td>"
+				Write "<td>",ExtId,"</td>"
+				Set iField="" For {
+					Set iField=$Order(resultFields(iField)) If iField="" Quit
+					Set FieldId=$List(resultFields(iField),1)
+					Set Value=##class(%iKnow.Queries.MetadataAPI).GetValueById(domainId, FieldId, SrcId)
+					Set Value=##class(iKnow.SetAnalysis).FieldValue(Value,$List(resultFields(iField),4))
+					Write "<td>",Value,"</td>"
+				}
+				Write "</tr>"
+			}
+		}
+		//show meta fields
+		elseIf metadataField="sourceid" {
+			Set ExtId = ##class(%iKnow.Queries.SourceAPI).GetExternalId(domainId, iPat)
+			Write "<td>",ExtId,"</td>"
+			Set iField="" For {
+				Set iField=$Order(resultFields(iField)) If iField="" Quit
+				Set FieldId=$List(resultFields(iField),1)
+				Set Value=##class(%iKnow.Queries.MetadataAPI).GetValueById(domainId, FieldId, iPat)
+				Set Value=##class(iKnow.SetAnalysis).FieldValue(Value,$List(resultFields(iField),4))
+				Write "<td>",Value,"</td>"
+			}
+		}
+		Set Score=$Get(^iKnow.SetAnalysis(projectId,Set,"P",iPat))
+		If Score'="" {
+			If $ListValid(Score),Score'="" {
+			
+			} else {
+				Write "<td>"
+				Write Score
+				Write "</td>"
+			}
+		}
+		Write "</tr>"
+	}
+	write "</table>"
+</script>
+
+<script language="Cache" method="ExportEntities" arguments="projectId, Set, Type, domainId" returntype="">
+	write "<table>"
+	write "<tr><td>"_$Select(Type="E":"Selected Entity",1:"Non-Selected Entity"),"</td><td>Frequency</td></tr>"
+	Set Ent="" For  {
+		Set Ent=$Order(^iKnow.SetAnalysis(projectId,Set,Type,Ent),1,entId) If Ent="" Quit
+		If (Type="E")!'$Data(^iKnow.SetAnalysis(projectId,Set,"E",Ent)) {
+			Write "<tr><td>",Ent,"</td><td>", ##class(%iKnow.Queries.EntityAPI).GetFrequency(domainId, entId), "</td></tr>",!
+		}
+	}
+	write "</table>"
+</script>
+
+<script language="cache" runat="server">
+  Set action=$get(%request.Data("action",1))
+  Set Set=%request.Data("set",1)
+  Set Type=%request.Data("type",1)
+
+  Set projectName=$Get(%session.Data("projectName"))
+  Set projectId=""
+  If projectName'="" {
+    &sql(Select Id, iKnowDomain, iKnowMetafield, Resource into :projectId, :domainName, :metadataField, :resource From iKnow_SetAnalysis.Projects Where Name = :projectName)
+	  If SQLCODE=0 {
+	    Set objDomain=##class(%iKnow.Domain).Open(domainName)
+		If objDomain'="" {
+		  Set domainId=objDomain.Id
+		} else {
+	      Set domainId=""
+		}
+	  }
+  }
+  If projectId="" {
+    write "<table>"
+	write "<tr><td>Could not get the Project information, possibly due to timeout on the server, pls try to refresh the page before exporting again..</td></tr>"
+	write "</table>"
+  } elseif Type="P" {
+	Do ..ExportMembers(projectId, Set)
+  } elseif (Type="E")!(Type="X") {
+	Do ..ExportEntities(projectId, Set, Type, domainId)
+  }
+</script>
+
+
+
+
+</head>
+
+<body>
+
+</body>
+</html>
+]]></CSP>
+</Export>

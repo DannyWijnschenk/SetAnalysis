@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="splitter/splitter.css" application="/csp/setanalysis/" default="1"><![CDATA[
+
+.splitter {
+	height: 100%;
+	border: 0px solid;
+
+}
+
+.ui-state-default { background-color: #ccc }
+.ui-state-hover { background-color: darkgray }
+.ui-state-highlight { background-color: darkgray }
+.ui-state-error { background-color: #eaa }
+
+.splitter-pane {
+	overflow: auto;
+}
+.splitter-bar-vertical {
+	width: 6px;
+	background-image: url(img/vgrabber.gif);
+	background-repeat: no-repeat;
+	background-position: center;
+}
+.splitter-bar-vertical-docked {
+	width: 10px;
+	background-image: url(img/vdockbar-trans.gif);
+	background-repeat: no-repeat;
+	background-position: center;
+}
+.splitter-bar.ui-state-highlight {
+	opacity: 0.7;
+}
+.splitter-iframe-hide {
+	visibility: hidden;
+}]]></CSP>
+</Export>

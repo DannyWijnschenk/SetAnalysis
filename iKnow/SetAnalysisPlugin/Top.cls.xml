@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.Top">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63418,39318.892486</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>11</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>Top</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[Returns the top # concepts.<br>Enter a number.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Count</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>e.g. 50</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>8</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>ENTITY</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<Description><![CDATA[
+Each derived plugin should override & implement 4 methods : GetPlugin, GetPluginValue, GetPluginId, SetPluginMembers]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set sc=$$$OK
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	If +Input=0 Set Input=500  ;default top
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	Set sc = ##class(%iKnow.Queries.EntityAPI).GetTop(.result, DomainId, 1, +Input, objFilter,,,,,Blacklists)
+
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Kill ^||iKnow.SetAnalysisTemp
+	Set iCount="" 
+	For {
+		Set iCount=$Order(result(iCount),1,data) If iCount="" Quit
+		set ent=$list(data,2)
+		If InputPattern'="" {
+			Set ent=..ReplacePattern(ent, InputPattern)
+		}
+		Set frequency=$List(data,3)
+		Set ^||iKnow.SetAnalysisTemp(ent)=$Get(^||iKnow.SetAnalysisTemp(ent))+frequency
+		Set ^||iKnow.SetAnalysisTemp(ent,$list(data,1))=frequency
+	}
+	Set ent=""
+	For {
+		Set ent=$Order(^||iKnow.SetAnalysisTemp(ent)) If ent="" Quit
+		Set frequency=^||iKnow.SetAnalysisTemp(ent)
+		Set sort=" "_$J(99999999-frequency,8)_$ZCVT(ent,"U")
+		Set sortId=$i(^iKnow.SetAnalysisTemp(resultPtr,"SINC"))  ;= S increment
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"SINC",sortId)=sort
+		Set entId="",entIdList=""
+		For {
+			Set entId=$Order(^||iKnow.SetAnalysisTemp(ent,entId)) If entId="" Quit
+			Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,sortId,entId)=^||iKnow.SetAnalysisTemp(ent,entId)
+			Set resultEnt=resultEnt+1
+		}
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,sortId)=$ListBuild(ent_" [ "_frequency_" ]")
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+
+	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Value)
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+
+	Do ##class(iKnow.SetAnalysis).BuildFilterFromSet(ProjectId, SaveSet,.objFilter)
+
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		Set entList=$lb(id)
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.result, DomainId, entList, 0,,objFilter)
+		Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.result)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

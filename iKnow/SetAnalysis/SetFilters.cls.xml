@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.SetFilters">
+<Super>%Persistent</Super>
+<TimeCreated>62897,70534.956847</TimeCreated>
+
+<Property name="MetaField">
+<Type>%String</Type>
+</Property>
+
+<Property name="Operator">
+<Type>%String</Type>
+</Property>
+
+<Property name="Value">
+<Type>%String</Type>
+</Property>
+
+<Property name="DisplayValue">
+<Type>%String</Type>
+</Property>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.SetFiltersD</DataLocation>
+<DefaultData>SetFiltersDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.SetFiltersD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.SetFiltersI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.SetFiltersS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetFiltersDefaultData">
+<Structure>listnode</Structure>
+<Subscript/>
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>MetaField</Value>
+</Value>
+<Value name="3">
+<Value>Operator</Value>
+</Value>
+<Value name="4">
+<Value>Value</Value>
+</Value>
+<Value name="5">
+<Value>DisplayValue</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

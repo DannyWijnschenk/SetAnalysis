@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="nglib/additional.css" application="/csp/setanalysis/" default="1"><![CDATA[
+.lightgray {
+  background-color: lightgray;
+}
+]]></CSP>
+</Export>

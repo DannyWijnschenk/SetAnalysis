@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.SetDefinitions">
+<Super>%SerialObject</Super>
+<TimeCreated>62897,70139.092117</TimeCreated>
+
+<Storage name="Default">
+<Type>%Library.CacheSerialState</Type>
+<DataLocation>^iKnow.SetAn4ECA.SetDefinitionsD</DataLocation>
+<DefaultData>SetDefinitionsDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAn4ECA.SetDefinitionsD</IdLocation>
+<IndexLocation>^iKnow.SetAn4ECA.SetDefinitionsI</IndexLocation>
+<State>SetDefinitionsState</State>
+<StreamLocation>^iKnow.SetAn4ECA.SetDefinitionsS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetDefinitionsDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Definition</Value>
+</Value>
+<Value name="3">
+<Value>Calculated</Value>
+</Value>
+<Value name="4">
+<Value>Plugin</Value>
+</Value>
+<Value name="5">
+<Value>Input</Value>
+</Value>
+<Value name="6">
+<Value>OnSet</Value>
+</Value>
+</Data>
+<Data name="SetDefinitionsState">
+<Value name="1">
+<Value>Plugin</Value>
+</Value>
+<Value name="2">
+<Value>Input</Value>
+</Value>
+<Value name="3">
+<Value>OnSet</Value>
+</Value>
+<Value name="4">
+<Value>Calculated</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

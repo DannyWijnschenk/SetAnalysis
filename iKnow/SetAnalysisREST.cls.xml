@@ -1,0 +1,799 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisREST">
+<Super>%CSP.REST</Super>
+<TimeCreated>63048,75245.953583</TimeCreated>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+	To install the REST handler :
+	- Caché Management Portal -> System Administration -> Security -> Applications -> Web Applications
+	-- Create New Web Application :
+	--- Name      : /csp/your namespace/rest
+	--- Namespace : Your namespace
+	--- Enabled   : [x] Application [x] CSP/ZEN [ ] inbound Web Services
+	--- Dispatch Class : iKnow.SetAnalysisREST
+	URL for REST : http://ipadress:port/csp/your_namespace/rest/api/1
+Implemented?  Rest URL                                                 : Output
+	[x]       /api/1                                                       : 'projects'
+	[x]       /api/1/projects                                              : Project1, Project2, ...
+	[x]       /api/1/projects/Project1                                     : 'sets', 'members' (todo: 'patients' can be an alias for 'members')
+
+	[x]       /api/1/projects/Project1/sets                                : Set1, Set2, ...
+	[x]       /api/1/projects/Project1/members                             : Member1, Member2, ...
+
+    [ ]       /api/1/projects/Project1/sets/Set1                           : 'members', todo:'selected_elements' 
+    [x]       /api/1/projects/Project1/sets/Set1/members                   : Member1, Member2, ...
+    [ ]       /api/1/projects/Project1/sets/Set1/members/Member1           : 'sentences','sources'
+    [x]       /api/1/projects/Project1/sets/Set1/members/Member1/sentences : Sentence1,Sentence2,...
+    [x]       /api/1/projects/Project1/sets/Set1/members/Member1/sources   : Source1,Source2,...
+
+    [ ]       /api/1/projects/Project1/members/Member1                     : 'sets' 
+    [x]       /api/1/projects/Project1/members/Member1/sets                : Set1, Set2, ...
+    [ ]       /api/1/projects/Project1/members/Member1/sets/Set1           : 'sentences','sources'
+    [x]       /api/1/projects/Project1/members/Member1/sets/Set1/sentences : Sentence1,Sentence2,...
+    [x]       /api/1/projects/Project1/members/Member1/sets/Set1/sources   : Source1,Source2,...
+    
+    [x]       /api/1/members/Member1/projects                              : Project1, Project2, ...
+
+*/
+]]></Content>
+</UDLText>
+
+<XData name="UrlMap">
+<Data><![CDATA[
+<Routes>
+<Route Url="/api/1" Method="GET" Call="GetBaseEntries"/>
+<Route Url="/api/1/projects" Method="GET" Call="iKnow.SetAnalysisREST:GetProjects"/>
+<Route Url="/api/1/projects/:project" Method="GET" Call="GetProjectEntries"/>
+<Route Url="/api/1/projects/:project/sets" Method="GET" Call="GetProjectSets"/>
+<Route Url="/api/1/projects/:project/sets/:set" Method="GET" Call="GetSet"/>
+<Route Url="/api/1/projects/:project/sets/:set/members" Method="GET" Call="GetSetMembers"/>
+<Route Url="/api/1/projects/:project/sets/:set/members/:member/sentences" Method="GET" Call="GetMemberSentences"/>
+<Route Url="/api/1/projects/:project/sets/:set/members/:member/sentences/:sentence/source" Method="GET" Call="GetSentenceSourceViaSetMember"/>
+<Route Url="/api/1/projects/:project/members" Method="GET" Call="GetProjectMembers"/>
+<Route Url="/api/1/projects/:project/members/:member/sets" Method="GET" Call="GetMemberSets"/>
+<Route Url="/api/1/projects/:project/members/:member/sets/:set/sentences" Method="GET" Call="GetSetSentences"/>
+<Route Url="/api/1/projects/:project/members/:member/sets/:set/sentences/:sentence/source" Method="GET" Call="GetSentenceSourceViaMemberSet"/>
+<Route Url="/api/1/members/:member/projects" Method="GET" Call="GetMemberProjects"/>
+<Route Url="/api/1.1/projectdetails" Method="GET" Call="iKnow.SetAnalysisREST:GetProjectDetails"/>
+<Route Url="/api/1.1/projectdetail/:project" Method="GET" Call="iKnow.SetAnalysisREST:GetProjectDetail"/>
+<Route Url="/api/1.1/projectsave" Method="POST" Call="iKnow.SetAnalysisREST:PostProjectSave"/>
+<Route Url="/api/1.1/blacklists/:domain" Method="GET" Call="iKnow.SetAnalysisREST:GetBlacklists"/>
+<Route Url="/api/1.1/projects/:project/sets" Method="GET" Call="iKnow.SetAnalysisREST:GetProjectSets2"/>
+<Route Url="/api/1.1/plugins" Method="GET" Call="GetPlugins"/>
+<Route Url="/api/1.1/patterns" Method="GET" Call="GetPatterns"/>
+<Route Url="/api/1.1/projects/:project/set/:set" Method="GET" Call="GetSet"/>
+</Routes>
+]]></Data>
+</XData>
+
+<Method name="GetProjectSets2">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	Try {
+
+		write "["
+	    Set sc = ##class(iKnow.SetAnalysisAPI).GetSetsByProject(.Result, pProject, ,0)
+		Set iResult=""
+		For iSet=1:1 {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set Set=$List(data,1)
+			Write " { ""roleName"" : """_Set_""", ""roleId"" : ""role"_iSet_""", ""collapsed"" : true, ""children"" : ["
+
+            Write "   { ""roleName"" : ""definition"", ""roleId"" : ""role"_iSet_"def"", ""collapsed"" : true, ""children"" : ["
+			;here put detail of definition
+    		Set data=##class(iKnow.SetAnalysisAPI).GetSetDefinition(pProject, Set)
+    		Set header=$lb("Formula","PluginId","Input","Set","DeepSeeEnabled","RestEnabled","Pattern","Description")
+
+            ;Write "   { ""roleName"" : ""description"", ""roleId"" : ""role"_iSet_"des"", ""collapsed"" : true, ""children"" : ["
+			;Write "  ]},"
+
+
+			Write "  ]},"
+
+            Write "   { ""roleName"" : ""description"", ""roleId"" : ""role"_iSet_"des"", ""collapsed"" : true, ""children"" : ["
+			Write "  ]},"
+
+            Write "   { ""roleName"" : ""entities"", ""roleId"" : ""role"_iSet_"ent"", ""collapsed"" : true, ""children"" : ["
+			;Do ##class(iKnow.SetAnalysisAPI).GetEntitiesBySet(.ResultE, pProject, Set)
+			Set iEntity="" For {
+				Set iEntity=$Order(ResultE(iEntity),1,data) If iEntity="" Quit
+            	Write "   { ""roleName"" : """_$List(data,1)_""", ""roleId"" : ""role"_iSet_"entE"_iEntity_""", ""collapsed"" : true, ""children"" : [  ]}"
+				If $Order(ResultE(iEntity))'="" Write ","
+			}
+			Write "  ]},"
+
+
+            Write "   { ""roleName"" : ""members"", ""roleId"" : ""role"_iSet_"m"", ""collapsed"" : true, ""children"" : ["
+			;Do ##class(iKnow.SetAnalysisAPI).GetMembersBySet(.ResultM, pProject, Set)
+			Set iMember="" For {
+				Set iMember=$Order(ResultM(iMember),1,data) If iMember="" Quit
+            	Write "   { ""roleName"" : """_$List(data,1)_""", ""roleId"" : ""role"_iSet_"entM"_iMember_""", ""collapsed"" : true, ""children"" : ["
+            	
+            	;Do ##class(iKnow.SetAnalysisAPI).GetSentencesByMember(.ResultS, pProject, Set, $List(data,1), 0)
+				Set iSent="" For {
+					Set iSent=$Order(ResultS(iSent),1,data) If iSent="" Quit
+            		Write "   { ""roleName"" : """_$List(data,1)_""", ""roleId"" : ""role"_iSet_"entM"_iMember_"S"_iSent_""", ""collapsed"" : true, ""children"" : ["
+            	
+            		Write "  ]}"
+            		If $Order(ResultS(iSent))'="" Write ","
+				}
+            	Write "  ]}"
+				If $Order(ResultM(iMember))'="" Write ","
+			}
+			Write "  ]}"
+
+			Write "]}"
+			If $Order(Result(iResult))'="" Write ","
+		}
+		write "]"
+		
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+		&html<
+ [
+        { "roleName" : "User!!!", "roleId" : "role1", "children" : [
+          { "roleName" : "subUser1", "roleId" : "role11", "collapsed" : true, "children" : [] },
+          { "roleName" : "subUser2", "roleId" : "role12", "collapsed" : true, "children" : [
+            { "roleName" : "subUser2-1", "roleId" : "role121", "children" : [
+              { "roleName" : "subUser2-1-1", "roleId" : "role1211", "children" : [] },
+              { "roleName" : "subUser2-1-2", "roleId" : "role1212", "children" : [] }
+            ]}
+          ]}
+        ]},
+
+        { "roleName" : "Admin", "roleId" : "role2", "children" : [
+          { "roleName" : "subAdmin1", "roleId" : "role11", "collapsed" : true, "children" : [] },
+          { "roleName" : "subAdmin2", "roleId" : "role12", "children" : [
+            { "roleName" : "subAdmin2-1", "roleId" : "role121", "children" : [
+              { "roleName" : "subAdmin2-1-1", "roleId" : "role1211", "children" : [] },
+              { "roleName" : "subAdmin2-1-2", "roleId" : "role1212", "children" : [] }
+            ]}
+          ]}
+        ]},
+
+        { "roleName" : "Guest", "roleId" : "role3", "children" : [
+          { "roleName" : "subGuest1", "roleId" : "role11", "children" : [] },
+          { "roleName" : "subGuest2", "roleId" : "role12", "collapsed" : true, "children" : [
+            { "roleName" : "subGuest2-1", "roleId" : "role121", "children" : [
+              { "roleName" : "subGuest2-1-1", "roleId" : "role1211", "children" : [] },
+              { "roleName" : "subGuest2-1-2", "roleId" : "role1212", "children" : [] }
+            ]}
+          ]}
+        ]}
+      ]
+		
+		>
+
+*/
+]]></Content>
+</UDLText>
+
+<Method name="GetBaseEntries">
+<Description>
+This method returns entrypoints</Description>
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim List as %String
+    
+	Try {
+		Set List(1)=$Lb("projects",..LinkUrl("1/projects"),"Projects")
+		Do ..Output("entrypoints", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+
+	;Do ##class(%ZEN.Auxiliary.jsonProvider).%WriteJSONFromObject("","iKnow.SetAnalysis.RESTEntries","GetObjects")
+   	;d ##class(%ZEN.Auxiliary.jsonProvider).%ArrayToJSON($lb("rel","ref"),.list,.output)
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetProjects">
+<Description>
+This method returns the project sets for the named project</Description>
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim iResult, ProjectId as %Integer
+    #dim sc, ProjectName, List, Result, data as %String
+	
+	Try {
+		Set sc = ##class(iKnow.SetAnalysisAPI).GetProjects(.Result)
+		Set iResult=""
+		For  {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set ProjectId=$List(data,1)
+			Set ProjectName=$List(data,2)
+			Set List(ProjectId)=$Lb(ProjectName,..LinkUrl("projects/"_ProjectName),ProjectName,$List(data,3))
+		}
+		Do ..Output("projects", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetProjectDetail">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>projectId:%Integer=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim iResult, iProp as %Integer
+    #dim sc, ProjectName, List, Result, data as %String
+	#dim PropList as %String = $Lb("id", "Name", "Description", "iKnowDomain", "iKnowMetafield", "created", "modified")
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	Try {
+
+		Do ##class(iKnow.SetAnalysis.Projects).GetProjects(.Result, projectId)
+			
+		Set iResult=""
+		For iNotFirst=0:1 {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			For iProp=6,7 Set $List(data,iProp)=$Select($List(data,iProp)="":"",1:$ZDate($List(data,iProp),3))
+			If iNotFirst Write ","
+			Write "  {",!
+			For iProp=1:1:$ListLength(PropList) {
+				Write "  """,$List(PropList,iProp),""" : """,$Replace($TR($List(data,iProp),$C(10),""),$C(13),"//n"),""""
+				If iProp<$ListLength(PropList) Write ","
+			}
+			Write "  }",!
+		}
+	} catch(e) {
+		set tSC = e.AsStatus()
+	}
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetProjectDetails">
+<Description>
+Get projets + details for coplete Projects table</Description>
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	Try {
+		Write "[",!
+		Do ..GetProjectDetail()
+		Write "]"
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="PostProjectSave">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>body:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Merge ^dw($i(^dw))=body
+	try {
+		set ^dw($i(^dw))="PostProjectSave entered on "_$H
+		set objStream=%request.Content
+		set ^dw($i(dw),"size")=objStream.Size
+		While 'objStream.AtEnd {
+			Set line = objStream.ReadLine()
+			set ^dw($i(^dw),"line") = line
+		set stat = ##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(line,,.pObject)
+		open "dump.txt":"wns" use "dump.txt" do $system.OBJ.Dump(pObject) Close "dump.txt" use 0
+
+		set projectId = pObject.id
+		set name = pObject.Name
+		set description = pObject.Description
+		set ^dw($i(^dw),"Domain") = pObject.Domain
+		;For iCount=1:1:pObject.Blacklist.Count() {
+		;	set ^dw($i(^dw),"Blacklist",iCount) = pObject.Blacklist.GetAt(iCount)
+		;}
+		&sql(Update iKnow_SetAnalysis.Projects (Name, Description) Values (:name, :description) Where ID = :projectId)
+		If SQLCODE'=0 set ^dw("err")=%msg
+		}
+	} catch {
+		set ^dw("err")=$ZE
+	}
+	quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="GetBlacklists">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>domain:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim objDomain as %iKnow.Domain
+    #dim domainId,iBlacklist as %Integer
+    #dim resultBlacklists, data, name as %String
+	
+	Write "[",!
+	Try {
+		If domain'?.N {
+			Set objDomain=##class(%iKnow.Domain).Open(domain)
+			if objDomain="" Quit
+			Set domainId=objDomain.Id
+		} else {
+			Set domainId = domain
+		}
+		Do ##class(%iKnow.Utils.MaintenanceAPI).GetBlackLists(.resultBlacklists,domainId)
+		
+		Set iBlacklist=""
+		For {
+			Set iBlacklist=$Order(resultBlacklists(iBlacklist),1,data) If iBlacklist="" Quit
+			Set name=$List(data,2)
+			Write "{"
+			Write """id"":""",name,""", ""text"":""", name, """, ""type"":""blacklist"""
+			Write "}"
+			If $Order(resultBlacklists(iBlacklist))'="" Write ","
+		}
+	} catch(e) {
+		set tSC = e.AsStatus()
+	}
+	Write "]"
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetPlugins">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	Write "[",!
+	Try {
+		Do ##class(iKnow.SetAnalysisPlugin).GetActions(.actionList)
+		Set iPlugin=""
+		For iFollow=0:1 {
+			Set iPlugin=$Order(actionList(iPlugin),1,data) If iPlugin="" Quit
+			If iFollow write ","
+			Set Fields="Id,Name,InputLabel,InputSize,iKnowDomain,InputSet,SetLabel,Metafield,ShortDescription,InputPattern,InputPlaceholder,Order,DisableManualSelection"
+			Write "{ "
+			For iPiece=1:1:$Length(Fields,",") {
+				Write """",$Piece(Fields,",",iPiece),""" : """_$List(data,iPiece)_""""
+				If iPiece<$Length(Fields,",") Write ","
+			}
+			Write "}"			
+		}
+	} catch(e) {
+		set tSC = e.AsStatus()
+	}
+	Write "]"
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetPatterns">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	Write "[",!
+	Try {
+		Do ##class(iKnow.SetAnalysis.Patterns).GetPatterns(.list)
+		Set iPattern=""
+		For iFollow=0:1 {
+			Set iPattern=$Order(list(iPattern),1,data) If iPattern="" Quit
+			If iFollow write ","
+			Write "{ ""Id"" : """_$List(data,1)_""", ""Name"" : """_$List(data,2)_""" }"			
+		}
+	} catch(e) {
+		set tSC = e.AsStatus()
+	}
+	Write "]"
+	Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetProjectEntries">
+<Description>
+This method returns entrypoints for projects</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim List as %String
+   
+	Try {
+		Set List(1)=$Lb("Sets",..LinkUrl(pProject_"/sets"),"Sets")
+		Set List(2)=$Lb("Members",..LinkUrl(pProject_"/members"),"Members")
+		Do ..Output("projectentries", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetProjectSets">
+<Description>
+This method returns the project sets for the named project</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim sc, Set, List, Result, data as %String
+    #dim iResult as %Integer
+    Try {
+	    Set sc = ##class(iKnow.SetAnalysisAPI).GetSetsByProject(.Result, pProject, ,1)
+		Set iResult=""
+		For  {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set Set=$List(data,1)
+			Set List(iResult)=$ListBuild(Set,"sets/"_Set_"/members",Set,$List(data,4))
+		}
+		Do ..Output("sets", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetSet">
+<Description>
+This method returns the set info for the named set</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pSet:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim ProjectData, header as %String
+    #dim iList as %Integer
+    Try {
+    	Set ProjectData=##class(iKnow.SetAnalysisAPI).GetSetDefinition(pProject, pSet)
+    	Set header=$lb("Formula","PluginId","Input","Set","DeepSeeEnabled","RestEnabled","Pattern","Description")
+		Write "{",!
+		For iList=1:1:$ListLength(header) {
+			Write $List(header, iList), ":""", $List(ProjectData,iList),""",",!
+		}
+		Write "}",!
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetSetMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pSet:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	#dim iResult as %Integer
+	#dim Member, Result, List, data as %String    
+    Try {
+		Do ##class(iKnow.SetAnalysisAPI).GetMembersBySet(.Result, pProject, pSet)
+		Set iResult=""
+		For  {
+			Set iResult = $Order(Result(iResult),1,data) If iResult="" Quit
+			Set Member=$List(data,1)
+			Kill Result(iResult)  ;clean up to not have two big arrays in memory
+			Set List(iResult)=$ListBuild(Member,"members/"_Member_"/sentences",Member)
+		}
+		Do ..Output("members", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetMemberSentences">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pSet:%String,pMember:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim sc as %Status
+    #dim iResult, SrcId, SentId, iList as %Integer
+    #dim Result, Sentence, List, data as %String
+    
+	Try {
+		Set sc = ##class(iKnow.SetAnalysisAPI).GetSentencesByMember(.Result, pProject, pSet, pMember, 1)
+		;todo : Set xmlMode = $Get(%request.Data("xml",1)) if 'xmlmode no formatting of sentence ???
+		Set iResult="",iList=0
+		For {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set SrcId=$List(data,1)
+			Set SentId=$List(data,2)
+			Set Sentence=$List(data,3)
+			Kill Result(iResult)
+			Set List($I(iList))=$ListBuild(Sentence,"sentences/"_SentId_"/source",SentId)
+		}
+		Do ..Output("sentences", .List)
+              
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetSentenceSourceViaSetMember">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pSet:%String,pMember:%String,pSentence:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim DomainId, ProjectId, iList, SrcId, iSent,SentId as %Integer
+    #dim Terms,Sentence,List,resultSent as %String
+    
+    Set DomainId=..GetDomainIdFromProject(pProject)
+    Set ProjectId=..GetProjectIdFromName(pProject)
+   Try {
+		Set iList=0
+		Set SrcId=##class(%iKnow.Queries.SentenceAPI).GetSourceId(DomainId, pSentence)
+		If SrcId'="" {
+			Set Terms=##class(iKnow.SetAnalysis).GetAllTerms(ProjectId, pSet)
+			Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.resultSent, DomainId, SrcId, 0)
+			Set iSent="" For {
+	  			Set iSent=$Order(resultSent(iSent)) If iSent="" Quit
+	  			Set SentId=$List(resultSent(iSent),1)
+				Set Sentence=##class(iKnow.SetAnalysis).GetSentence(DomainId, SentId, .Terms)
+				Set List($I(iList))=$ListBuild(Sentence)
+			}
+		}
+		Do ..Output("source", .List)
+              
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+
+
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetProjectMembers">
+<Description>
+This method returns the project members for the named project</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+	#dim Result, Member, data, List as %String
+	#dim iResult as %Integer
+		
+    Try {
+		Do ##class(iKnow.SetAnalysisAPI).GetMembersByProject(.Result, pProject)
+		Set iResult=""
+		For  {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set Member=$List(data,1)
+			Set List(iResult)=$ListBuild(Member,"members/"_Member_"/sets",Member)
+		}
+		Do ..Output("members", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+        Write "error:",$ze,!
+    }
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetMemberSets">
+<Description>
+This method returns the sets for a named member</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pMember:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim iResult as %Integer
+    #dim Result,Set,List,data as %String
+    #dim sc as %Status
+    
+    Try {
+	    Set sc = ##class(iKnow.SetAnalysisAPI).GetSetsByProject(.Result, pProject, pMember, 1)
+		Set iResult=""
+		For  {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set Set=$List(data,1)
+			Set List(iResult)=$ListBuild(Set,"sets/"_Set_"/sentences",Set)
+		}
+
+		Do ..Output("sets", .List)
+              
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetSetSentences">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pMember:%String,pSet:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit ..GetMemberSentences(pProject, pSet, pMember)
+]]></Implementation>
+</Method>
+
+<Method name="GetSentenceSourceViaMemberSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject:%String,pMember:%String,pSet:%String,pSentence:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit ..GetSentenceSourceViaSetMember(pProject, pSet, pMember, pSentence)
+]]></Implementation>
+</Method>
+
+<Method name="GetMemberProjects">
+<Description>
+This method returns the projects for the named member</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pMember:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    #dim tSC As %Status = $$$OK
+    #dim e As %Exception.AbstractException
+    #dim iResult, ProjectId as %Integer
+    #dim ProjectName, List, Result, data as %String
+    #dim sc as %Status
+	Try {
+		Set sc = ##class(iKnow.SetAnalysisAPI).GetProjects(.Result, pMember)
+		Set iResult=""
+		For  {
+			Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+			Set ProjectId=$List(data,1)
+			Set ProjectName=$List(data,2)
+			Set List(ProjectId)=$ListBuild(ProjectName,"../../projects/"_ProjectName_"/members/"_pMember_"/sets",ProjectName)
+		}
+		Do ..Output("projects", .List)
+    } Catch (e) {
+        Set tSC=e.AsStatus()
+    }
+    Quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="GetDomainIdFromProject">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#dim objDomain as %iKnow.Domain
+	&sql(Select iKnowDomain Into :DomainName From iKnow_SetAnalysis.Projects Where Name = :pProject)
+	Set objDomain=##class(%iKnow.Domain).Open(DomainName)
+	If objDomain="" Quit ""
+	Quit objDomain.Id
+]]></Implementation>
+</Method>
+
+<Method name="GetProjectIdFromName">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pProject</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	&sql(Select ID Into :ProjectId From iKnow_SetAnalysis.Projects Where Name = :pProject)
+	If SQLCODE'=0 Quit ""
+	Quit ProjectId
+]]></Implementation>
+</Method>
+
+<Method name="Output">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[Base:%String,&List:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	#dim xmlMode, iList as %Integer
+	#dim addURL as %String
+	
+	Set xmlMode = $Get(%request.Data("xml",1))
+	If xmlMode '= "" {  //XML
+		If xmlMode=2 Set %response.ContentType="application/xml"
+		Set addURL="?xml="_xmlMode
+			write "<link rel=""stylesheet"" type=""text/css"" href="""_$Piece(%request.URL,"/rest/api/1",1)_"/iKnowSetAnalysisHighlight.css"" />",!
+		write "<",Base,">",!
+		Set iList="" For {
+			Set iList=$Order(List(iList)) If iList="" Quit
+			If xmlMode=2 write "<item>"
+			Write "<rel>",$List(List(iList),1),"</rel>",!
+			If $ListLength(List(iList))>1 {
+				Write "<href>"
+				If xmlMode=1 Write "<a href='"_$List(List(iList),2)_addURL_"'>"_$List(List(iList),3)_"</a>"
+				If xmlMode=2 Write $List(List(iList),2)_addURL
+				Write "</href>",!
+			}
+			If xmlMode=1 {
+				Write "<br>",!
+			} elseIf xmlMode=2 {
+				write "</item>"
+			}
+		}
+		write "</",Base,">",!
+	
+	} elseif $Get(%request.Data("csv",1))=1 {
+		Set %response.ContentType="text/plain"
+		Set addURL="?csv=1"
+		Set iList="" For {
+			Set iList=$Order(List(iList)) If iList="" Quit
+			Write $List(List(iList),1)
+			If $ListLength(List(iList))>1 Write $C(9),$List(List(iList),2),$C(9),$List(List(iList),3)
+			Write !
+		}
+	} else {  //JSON
+		Do ..OutputJson("entrypoints", .List)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="LinkUrl">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Link:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit ..Link(Link)
+]]></Implementation>
+</Method>
+
+<Method name="OutputJson">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Base:%String,List,SimpleList:%Boolean=1</FormalSpec>
+<Implementation><![CDATA[
+	#dim BaseArray as %String
+	#dim iList as %Integer
+	Set %response.ContentType="application/json"
+	Set objProxy = ##class(%ZEN.proxyObject).%New()
+	Set objList=##class(%Library.ListOfDataTypes).%New()
+	Set iList="" For {
+		Set iList=$Order(List(iList)) If iList="" Quit
+		Set objOuterProxy = ##class(%ZEN.proxyObject).%New()
+		Set objInnerProxy = ##class(%ZEN.proxyObject).%New()
+		Set objInnerProxy.rel=$List(List(iList),1)
+		If $ListLength(List(iList))>1 Set objInnerProxy.href="<a href='"_$List(List(iList),2)_"'>"_$List(List(iList),3)_"</a>"
+		If $ListLength(List(iList))>3 Set objInnerProxy.desc=$List(List(iList),4)
+		Set objOuterProxy.link=objInnerProxy
+		Do objList.Insert(objOuterProxy)
+	}
+
+	set BaseArray(Base)=objList
+	Do objProxy.%CopyFromArray(.BaseArray)
+
+	Do objProxy.%ToJSON()
+]]></Implementation>
+</Method>
+</Class>
+</Export>

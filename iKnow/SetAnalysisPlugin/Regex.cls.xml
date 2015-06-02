@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.Regex">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63407,59382.590814</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>7</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>7</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>Regex</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[This plugin will return all Concepts from a Set that match a given Regex expression.<br> Example : <b>.*t[0-4] ?n[0-3] ?m[1-4].*</b> will return all concepts from a Set with Classification of Malignant Tumours (tnm).<br>Enter a Regular Expression and an existing set.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Regular Expression</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>type a regular expression</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Set</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>70</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>ENTITY</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<Description>
+Example : find all entities with tnm classification :
+         use Regex expression = .*t[0-4] ?n[0-3] ?m[1-4].*</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+
+	If $Get(Input)="" Quit 0
+	Set sc=$$$OK
+
+	Try {
+		If $Get(InputSet)="" {  //do the regex on all concepts
+			Do ##class(%iKnow.Queries.EntityAPI).GetTop("^||Temp",DomainId,0)
+			Set resultEnt=$Get(resultEnt,0)
+			Set iCount="" For {
+				Set iCount=$Order(^||Temp(iCount),1,Data)
+				If iCount="" Quit
+				Set Entity=$List(Data,2)
+				If $Match(Entity,Input) {
+					Set ^iKnow.SetAnalysisTemp(resultPtr,"S",iCount,$list(Data,1))=$ListBuild(Entity_" [ "_$list(Data,3)_" ]")
+					Set resultEnt=resultEnt+1
+				}
+			}
+		} else {  //do the regex on another set
+			Set Entity="" For {
+				Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
+				Set Entity=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Entity),1,Id) If Entity="" Quit
+				If $Match(Entity,Input) {
+					Set ^iKnow.SetAnalysisTemp(resultPtr,"S",Entity,Id)=$ListBuild(Entity)
+					Set resultEnt=resultEnt+1
+				}
+			}
+		}
+	} catch {
+		set sc=0
+		Do ##class(iKnow.SetAnalysis).Log("Error during RegEx : "_$TR($ze,"<>","[]"))
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Value)
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	Set entList=""
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		Set entList=entList_$lb(id)
+	}
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+
+	Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.result, DomainId, entList, 0)
+	Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.result)
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

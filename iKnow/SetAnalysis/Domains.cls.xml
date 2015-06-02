@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Domains">
+<Super>%Persistent</Super>
+<TimeCreated>63665,58880.35639</TimeCreated>
+
+<Property name="DomainId">
+<Type>%String</Type>
+</Property>
+
+<Property name="MetaField">
+<Type>%String</Type>
+</Property>
+
+<Property name="Disabled">
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="iFindWhere">
+<Description>
+If this domain is build using a Where on the general table which is also used as iFind index
+you can specify the Where here to add the correct iFind Where clause when searches are restricted
+to this domain </Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="Resource">
+<Description>
+If usage of this domain is restricted for users having this domain</Description>
+<Type>%String</Type>
+</Property>
+
+<Index name="idxDomain">
+<IdKey>1</IdKey>
+<Properties>DomainId</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Method name="Disabled">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>domainId</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	&sql(Select Disabled Into :disabled From iKnow_SetAnalysis.Domains Where DomainId = :domainId)
+	If SQLCODE'=0 Quit 0  ;a domain which is not known in this class is enabled by default
+	Quit disabled
+]]></Implementation>
+</Method>
+
+<Method name="GetMetaField">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	;old : global
+	Quit $Get(^iKnow.SetAnalysis(DomainId))
+	;new : class
+	&sql(Select MetaField into :MetaField from iKnow_SetAnalysis.Domains Where DomainId = :DomainId)
+	If SQLCODE'=0 Quit ""
+	Quit MetaField
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.DomainsD</DataLocation>
+<DefaultData>DomainsDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.DomainsD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.DomainsI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.DomainsS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="DomainsDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>MetaField</Value>
+</Value>
+<Value name="3">
+<Value>Disabled</Value>
+</Value>
+<Value name="4">
+<Value>iFindWhere</Value>
+</Value>
+<Value name="5">
+<Value>Resource</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

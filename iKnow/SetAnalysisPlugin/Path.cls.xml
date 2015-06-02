@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.Path">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63407,58202.537269</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>5</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>4</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>Path</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[Returns the paths with concepts from input or set that exists in iKnow.<br>Enter a concept OR an existing Set.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Concept</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>type an existing concept</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Set</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>70</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>PATH</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set sc=$$$OK
+	Set PathFromTo=0,PathFrom="",PathTo=""
+	If Input["~" {
+		Set PathFrom=$P(Input,"~",1)
+		Set PathTo=$P(Input,"~",2)
+		Set Input=$TR(Input,"~",",")
+		Set PathFromTo=1
+	}
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	If InputSet'="" {
+		Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
+		Do ..GetPathsBySet(ProjectId, DomainId, objFilter, InputSet, .resultPath)
+	} elseif Input["@" {
+		;todo : input can be 'abc,@xyz,@def' where abc is an entity, and xyz and def are sets
+		;       this should read : give all paths where entity abc is present AND
+		;                          a value from set xyz AND a value from set def
+		;get paths from first entry (set or entity)
+		;loop through the paths, and check that the rest of the entities or one per set are present
+		Do ..GetPaths(ProjectId, DomainId, objFilter, $Piece(Input,",",1), .resultPath)
+		For iPiece=2:1:$Length(Input,",") {
+			Set InputPiece=$Piece(Input,",",iPiece)
+			If $Extract(InputPiece,1)="@" {
+				Set InputSet=$Extract(InputPiece,2,*)
+				Set iPath=""
+				For {
+					Set iPath=$Order(resultPath(iPath),1,data) If iPath="" Quit
+					;loop thru entities of set, if no one is found kill path
+					Set Entity="",EntityFound=0
+					For  {
+						Set Entity=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Entity),1,EntityId) If Entity="" Quit
+						If $ListFind(data,EntityId) Set EntityFound=1 Quit
+					}
+					If 'EntityFound Kill resultPath(iPath)
+				}
+			} else {
+				;loop thru paths and delete all paths that do not contain entity
+				Set EntityId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, InputPiece)
+				Set iPath=""
+				For {
+					Set iPath=$Order(resultPath(iPath),1,data) If iPath="" Quit
+					If '$ListFind(data,EntityId) Kill resultPath(iPath)
+				}
+			}
+			;}
+		}
+	} else {
+		;replace numeric by #N# ?
+	    Set Input=$ListFromString(Input,",")
+		Do ..GetPathsByInput(DomainId, objFilter, Input, .resultPath)
+	}
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Kill ^||iKnow.SetAnalysisTemp
+	Set PathId="" For {
+		Set PathId=$Order(resultPath(PathId),1,Data) If PathId="" Quit
+		Set sort=1  ;" "_$J(99999999-$list(data,3),8)_$ZCVT($list(data,2),"U")
+		Set Path=""
+		Set PathCopy=$S(PathFromTo:0,1:1)
+		For iEnt=1:1:$ll(Data) {
+			Set Entity=##class(%iKnow.Queries.EntityAPI).GetValue(DomainId,$list(Data,iEnt))
+			If PathFromTo,Entity[PathFrom Set PathCopy=1
+			If PathCopy Set Path=Path_Entity_" "
+			If PathFromTo,Entity[PathTo Set PathCopy=0
+		}		
+		If InputPattern'="" {
+			Set Path=..ReplacePattern(Path, InputPattern)
+		}
+		Set ^||iKnow.SetAnalysisTemp(Path)=$Get(^||iKnow.SetAnalysisTemp(Path))+1
+		Set ^||iKnow.SetAnalysisTemp(Path,PathId)=""
+		Set resultEnt=resultEnt+1
+	}
+	
+	Set Path=""
+	For	{
+		Set Path=$Order(^||iKnow.SetAnalysisTemp(Path)) If Path="" Quit
+		Set PathId="",PathIdList=""
+		For {
+			Set PathId=$Order(^||iKnow.SetAnalysisTemp(Path,PathId)) If PathId="" Quit
+			Set PathIdList=PathIdList_$Lb(PathId)
+		}
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S",1,PathIdList)=$ListBuild(Path)
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPaths">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,DomainId,objFilter,Input,&resultPath]]></FormalSpec>
+<Implementation><![CDATA[
+	If $Extract(Input,1)="@" {
+		Do ..GetPathsBySet(ProjectId, DomainId, objFilter, $Extract(Input,2,*), .resultPath)
+	} else {
+		Do ..GetPathsByInput(DomainId, objFilter, Input, .resultPath)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetPathsBySet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,DomainId,objFilter,InputSet,&resultPath]]></FormalSpec>
+<Implementation><![CDATA[
+		Kill resultPath
+		Set Input=""
+		For  {
+			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
+			Kill resultInput
+			Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.resultInput, DomainId, $lb(Input), 0, , objFilter)
+			Set iCount=""
+			For  {
+				Set iCount=$Order(resultInput(iCount),1,Data) If iCount="" Quit
+				Set resultPath($list(Data,1))=$List(Data,2)
+			}
+		}
+]]></Implementation>
+</Method>
+
+<Method name="GetPathsByInput">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[DomainId,objFilter,Input,&resultPath]]></FormalSpec>
+<Implementation><![CDATA[
+		Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.result, DomainId, Input, 0, , objFilter,2)  //1 for ANY or 2 for ALL
+		Set iCount=""
+		For  {
+			Set iCount=$Order(result(iCount),1,Data) If iCount="" Quit
+			Set resultPath($list(Data,1))=$List(Data,2)
+		}
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set List = ##class(%iKnow.Queries.PathAPI).GetValue(DomainId, Id)
+	Quit $ListToString(List," ")
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit "?"   ;??? TODO Quit ##class(%iKnow.Queries.PathAPI).GetId(DomainId, Value)
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+	Do ##class(iKnow.SetAnalysis).BuildFilterFromSet(ProjectId, SaveSet,.objFilter)
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		Set pathList=$lb(id)
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByPathIds(.result, DomainId, pathList, 0,,objFilter)
+		Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,pathList,.result)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

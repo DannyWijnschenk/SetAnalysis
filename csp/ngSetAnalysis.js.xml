@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngSetAnalysis.js" application="/csp/setanalysis/" default="1"><![CDATA[
+//Define angular modules for our app
+var ProjectsApp = angular.module('ProjectsApp', ['ngResource']);
+var ProjectApp = angular.module('ProjectApp', ['ngResource']);
+var OptionsApp = angular.module('OptionsApp', []);
+var SetsApp = angular.module('SetsApp', ['angularTreeview']);
+var SetApp = angular.module('SetApp', ['ngResource']);
+
+var SetAnalysisApp = angular.module('SetAnalysisApp',
+    [
+       'ProjectsApp',
+       'ProjectApp',
+       'OptionsApp',
+       'SetsApp',
+       'SetApp',
+       'ngRoute'
+    ]
+);
+
+ hostURL = function() {
+	var path = location.pathname;  //e.g. /csp/myNamespace/page.csp
+	var pathArray = path.split('/');
+	pathArray.splice(pathArray.length-1,1);
+	var cspPath = pathArray.join('/');
+    return "http://"+document.domain+"\\:"+location.port+cspPath+"/"
+    };
+
+ function resourceErrorHandler(response) {
+ 	console.log(response.data);
+ 	$('#basicModal').find('.modal-title').text('Error');
+ 	$('#basicModal').find('.modal-body-part1').text('Status returned : ' + response.status + ' (' + response.statusText + ')');
+   	$('#basicModal').find('.modal-body-part2').text('REST call       : ' + response.config.url);
+ 	$('#basicModal').find('.modal-body-part3').text('Data            : ' + response.data);
+  	$('#basicModal').modal({"backdrop":"static"});
+ };
+ 
+ function resourceSuccessHandler(response) {
+	 if (typeof response.data.ErrorMessage != 'undefined') {
+ 		$('#basicModal').find('.modal-title').text('Error');
+ 		$('#basicModal').find('.modal-body-part1').text('Status returned : ' + response.data.ErrorMessage);
+   		$('#basicModal').find('.modal-body-part2').text('REST call       : ' + response.config.url);
+ 		$('#basicModal').find('.modal-body-part3').text('');
+  		$('#basicModal').modal({"backdrop":"static"});
+ 		console.log(response.data);
+	 }
+ };
+    
+//Define Routing for app
+//Uri /AddNewOrder -> template add_order.html and Controller AddOrderController
+//Uri /ShowOrders -> template show_orders.html and Controller AddOrderController
+SetAnalysisApp
+  .config(
+    ['$routeProvider',
+      function($routeProvider,$locationProvider,$route) {
+        $routeProvider
+          .when('/Projects', {
+            templateUrl: 'ngProjects.csp',
+            action: 'ProjectApp.ProjectsController'
+          })
+          .when('/NewProject', {
+            templateUrl: 'ngProject.csp',
+            action: 'ProjectApp.ProjectController'
+          })
+          .when('/EditProject/:ProjectId', {
+            templateUrl: 'ngProject.csp',
+            action: 'ProjectApp.ProjectController'
+          })
+          .when('/SetAnalysis/:ProjectId', {
+            templateUrl: 'http://localhost:57772/csp/setanalysis/iKnowSetAnalysis.csp' //?project=' + $route.current.params.ProjectId
+          })
+          .when('/Sets/:ProjectId', {
+	        templateUrl: 'ngSets.csp',
+	        action: 'ProjectSets.SetsController'
+          })
+          .when('/Set', {
+	        templateUrl: 'ngSet.csp',
+	        action: 'SetApp.SetController'
+          })
+          .otherwise( {
+            redirectTo: '/Projects'
+          });
+      }
+     ]
+  );
+ 
+ 
+ SetAnalysisApp.controller('MainController', function($scope, $route, $routeParams, $location) {
+     $scope.$route = $route;
+     $scope.$location = $location;
+     $scope.$routeParams = $routeParams;
+ });
+ 
+ 
+/*
+    **************************************************************************************
+    ****   Module Projects : search/list projects                                      ***
+    **************************************************************************************
+*/
+
+ ProjectsApp
+   .factory('restProjects', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/projectdetails", {}, {
+		query: { method: "GET", isArray: true,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+   }); //ProjectsApp.factory 'restProjects'
+   
+ ProjectsApp.controller('ProjectsController', ['$scope', '$resource', 'restProjects', function($scope,$resource,restProjects) {
+    $scope.projectsData = restProjects.query(function(data) {
+    }); //scope.projectsData
+
+    $scope.selectProject = function (project) {
+      window.location.href="iKnowSetAnalysis.csp?project="+project.name;
+    };
+  
+    $scope.sortField = undefined;
+    $scope.reverse = false;
+  
+    $scope.sort = function (fieldName) {
+	  if ($scope.sortField === fieldName) {
+	    $scope.reverse = !$scope.reverse;
+	  } else {
+	    $scope.sortField = fieldName;
+	    $scope.reverse = false;
+	  }
+    };
+  
+    $scope.isSortUp = function (fieldName) {
+	  return $scope.sortField === fieldName && !$scope.reverse;
+    };
+         
+    $scope.isSortDown = function (fieldName) {
+	  return $scope.sortField === fieldName && $scope.reverse;
+    };
+
+  }]); //app.controller 'projectController'
+  
+/*
+    **************************************************************************************
+    ****   Module Project : New/Edit a project                                         ***
+    **************************************************************************************
+*/
+
+
+ ProjectApp.factory('restProjectDetails', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/projectdetail/:projectid", {}, {
+		query: { method: "GET", isArray: false,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+		
+   }); //app.factory 'restProjectDetails'
+
+ ProjectApp.factory('restProjectSave', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/projectsave", {}, {
+		update : {method: 'POST',
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+   }); //app.factory 'restProjectSave'
+
+ ProjectApp.factory('restBlacklists', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/blacklists/:domain", {}, {
+		query : { method: "GET", isArray: true,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+   }); //app.factory 'restBlacklists'
+   
+ ProjectApp.controller('ProjectController', ['$scope', '$resource', '$routeParams', 'restProjectDetails', 'restProjectSave', 'restBlacklists', function($scope,$resource,$routeParams,restProjectDetails,restProjectSave, restBlacklists) {
+ 
+   $scope.ProjectId = $routeParams.ProjectId;
+   this.detail = restProjectDetails.query({projectid:$scope.ProjectId},function(data) {
+    });
+  
+    this.options = restBlacklists.query({domain:1},function(data) {
+    });
+   $scope.saveForm = function(project) {
+		restProjectSave.update(project.detail,function(data) {
+
+		});
+		alert('saved via rest..');
+   } 
+   
+    
+  }]); //app.controller 'projectController'
+  
+
+    var listOptions = [
+    {id:"id1", text:"option1", type:"A"},
+    {id:"id2", text:"option2", type:"A"},
+    {id:"id3", text:"option3", type:"C"}
+    ];
+
+/*
+    **************************************************************************************
+    ****   Module Set : New/Edit a set                                                 ***
+    **************************************************************************************
+*/
+
+
+ SetApp.factory('restSetDetails', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/setdetail/:set", {}, {
+		query: { method: "GET", isArray: false,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+ }); //app.factory 'restSetDetails'
+
+ SetApp.factory('restSetExecute', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/project/:project/setexecute/", {}, {
+		update : {method: 'POST',
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+   }); //app.factory 'restSetExecute'
+
+ SetApp.factory('restPlugins', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/plugins", {}, {
+		query : { method: "GET", isArray: true,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+   }); //app.factory 'restPlugins'
+
+ SetApp.factory('restPatterns', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/patterns", {}, {
+		query : { method: "GET", isArray: true,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+   }); //app.factory 'restPatterns'
+   
+ SetApp.controller('SetController', ['$scope', '$resource', '$routeParams', 'restSetDetails', 'restSetExecute', 'restPlugins', 'restPatterns', function($scope,$resource,$routeParams,restSetDetails,restSetExecute, restPlugins, restPatterns) {
+ 
+   $scope.setName = ''; //$routeParams.setName;
+   $scope.set = '';
+   this.detail = restSetDetails.query({set:$scope.setName},function(data) {
+    });
+  
+   $scope.plugins = restPlugins.query({},function(data) {
+   		$scope.set.Plugin = $scope.plugins[1];
+    });
+   $scope.patterns = restPatterns.query({},function(data) {
+    });
+
+   $scope.executeForm = function() {
+		$scope.result = restSetExecute.update($scope.set,function(data) {
+			alert('execute via rest..');
+		
+		});
+   } 
+
+   $scope.selectPlugin = function() {
+     console.log($scope.set.Plugin);
+     //$scope.set = $scope.plugins[index];
+     //console.log($scope.set);
+   };
+    
+   $scope.showConcept = function() {
+     if (typeof $scope.set.Plugin == 'undefined') {
+	     return false
+     } else {
+     	return ($scope.set.Plugin.InputSize > 0);
+     }
+   }
+   
+   $scope.showPattern = function() {
+     if (typeof $scope.set.Plugin == 'undefined') {
+	     return false
+     } else {
+     	return ($scope.set.Plugin.InputPattern == 1);
+     }
+   }
+   
+   $scope.showSetList = function() {
+     if (typeof $scope.set.Plugin == 'undefined') {
+	     return false
+     } else {
+     	return ($scope.set.Plugin.InputSet == 1);
+     }
+   }
+
+  }]); //app.controller 'setController'
+  
+  
+/*
+    **************************************************************************************
+    ****   Module Sets : show sets for a project                                       ***
+    **************************************************************************************
+*/
+
+   SetsApp.factory('restSets', function ($resource) {
+    return $resource(
+		hostURL() + "rest/api/1.1/projects/:projectid/sets", {}, {
+		query: { method: "GET", isArray: true,
+		         interceptor : {
+					response : resourceSuccessHandler,
+			        responseError : resourceErrorHandler
+			     }
+			   }
+		});
+		
+   }); //app.factory 'restSets'
+
+  //set controller
+  SetsApp.controller('SetsController', function($scope, $routeParams, restSets){
+  	//test tree model 
+
+   $scope.ProjectId = $routeParams.ProjectId;
+   $scope.roleList = restSets.query({projectid:$scope.ProjectId},function(data) {
+    });
+    
+  });
+  
+  
+
+/* TODO : put in separate file !!!
+    angular.treeview.js
+*/
+(function(l){l.module("angularTreeview",[]).directive("treeModel",function($compile){return{restrict:"A",link:function(a,g,c){var e=c.treeModel,h=c.nodeLabel||"label",d=c.nodeChildren||"children",k='<ul><li data-ng-repeat="node in '+e+'"><i class="collapsed" data-ng-show="node.'+d+'.length && node.collapsed" data-ng-click="selectNodeHead(node, $event)"></i><i class="expanded" data-ng-show="node.'+d+'.length && !node.collapsed" data-ng-click="selectNodeHead(node, $event)"></i><i class="normal" data-ng-hide="node.'+
+d+'.length"></i> <span data-ng-class="node.selected" data-ng-click="selectNodeLabel(node, $event)">{{node.'+h+'}}</span><div data-ng-hide="node.collapsed" data-tree-model="node.'+d+'" data-node-id='+(c.nodeId||"id")+" data-node-label="+h+" data-node-children="+d+"></div></li></ul>";e&&e.length&&(c.angularTreeview?(a.$watch(e,function(m,b){g.empty().html($compile(k)(a))},!1),a.selectNodeHead=a.selectNodeHead||function(a,b){b.stopPropagation&&b.stopPropagation();b.preventDefault&&b.preventDefault();b.cancelBubble=
+!0;b.returnValue=!1;a.collapsed=!a.collapsed},a.selectNodeLabel=a.selectNodeLabel||function(c,b){b.stopPropagation&&b.stopPropagation();b.preventDefault&&b.preventDefault();b.cancelBubble=!0;b.returnValue=!1;a.currentNode&&a.currentNode.selected&&(a.currentNode.selected=void 0);c.selected="selected";a.currentNode=c}):g.html($compile(k)(a)))}}})})(angular);]]></CSP>
+</Export>

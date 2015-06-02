@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisDashboardAnalyzer.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+
+<title>	iKnow SetAnalysis : Dashboard </title>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+
+</head>
+
+<body>
+<script language="cache" runat="server">
+  Set projectName=$Get(%session.Data("projectName"))
+</script>
+
+<!---  <i>SetAnalysis Project <b>#(projectName)#</b> on Domain <b>#(%session.Get("domainName"))#</b> (#(%session.Get("domainId"))#), based on metadatafield <b>#(%session.Get("metadataField"))#</b></i>-->
+  <div class="tabs">
+  <ul>
+	<li id="tab6"><a href="iKnowSetAnalysis.csp?action=tabproject">Project</a></li>
+	<li id="tab2"><a href="iKnowSetAnalysis.csp?action=tabplugin">Sets</a></li>
+	<li id="tab3"><a href="iKnowSetAnalysis.csp?action=tabformula">Formula</a></li>
+	<li id="tab1"><a href="iKnowSetAnalysis.csp?action=tabfilter">Filter</a></li>
+	<li id="tab4"><a href="iKnowSetAnalysis.csp?action=tabtools">Tools</a></li>
+	<li id="tab5"><a href="iKnowSetAnalysisHelp.csp">Help</a></li>
+  </ul>
+  </div>
+    
+<div class="right">
+  <span class="tabs">
+  <ul>
+	<li id="tab10"><a href="iKnowSetAnalysis.csp?action=setsdetail">Detail</a></li>
+	<li id="tab11"><a href="iKnowSetAnalysis.csp?action=setsoverview">Overview</a></li>
+	<li id="tab12"><a href="iKnowSetAnalysis.csp?action=setstreeview">Treeview</a></li>
+   	<li id="tab13"><a href="iKnowSetAnalysis.csp?action=setspanellookup">Lookup</a></li>
+	<li id="tab14" class="selected"><a href="iKnowSetAnalysisDashboard.csp?action=dashboard">Dashboard</a></li>
+  	<li id="tab15"><a href="iKnowSetAnalysisMembers.csp?action=null">Members</a></li>
+  </ul>
+  </span>
+	&nbsp;&nbsp;<a href='iKnowSetAnalysis.csp?action=refresh'><img src='refresh.png' title='refresh the page'width=16 height=16 border=0></a>
+	&nbsp;<a href='iKnowSetAnalysis.csp?CacheLogout=end'><img src='logout.png' title='logout and go to home page' border=0></a>
+
+  <br>  
+</div>
+<div class="sets">
+<a href="iKnowSetAnalysisDashboard.csp">Set Analysis Dashboard</a>
+<iframe src="_DeepSee.UI.Analyzer.zen?$NAMESPACE=#($NAMESPACE)#&amp;EMBED=1" frameborder=0 seamless="seamless"  width="100%" width="100%" height="650">
+</iframe>
+</div>
+
+</div>
+</body>
+</html>
+]]></CSP>
+</Export>

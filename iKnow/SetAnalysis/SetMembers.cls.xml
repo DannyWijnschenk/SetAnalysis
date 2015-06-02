@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.SetMembers">
+<Super>%Persistent</Super>
+<TimeCreated>62895,76071.431432</TimeCreated>
+
+<Property name="SetId">
+<Type>iKnow.SetAnalysis.Sets</Type>
+</Property>
+
+<Property name="Member">
+<Type>%String</Type>
+</Property>
+
+<Property name="Score">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="Frequency">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="ScoreSets">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Index name="idxSet">
+<Properties>SetId</Properties>
+</Index>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.SetMembersD</DataLocation>
+<DefaultData>SetMembersDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.SetMembersD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.SetMembersI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.SetMembersS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetMembersDefaultData">
+<Structure>listnode</Structure>
+<Subscript/>
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Set</Value>
+</Value>
+<Value name="3">
+<Value>Member</Value>
+</Value>
+<Value name="4">
+<Value>SetId</Value>
+</Value>
+<Value name="5">
+<Value>MemberId</Value>
+</Value>
+<Value name="6">
+<Value>Score</Value>
+</Value>
+<Value name="7">
+<Value>Frequency</Value>
+</Value>
+<Value name="8">
+<Value>ScoreSets</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

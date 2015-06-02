@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Patterns">
+<Super>%Persistent</Super>
+<TimeCreated>63252,56994.572731</TimeCreated>
+
+<Property name="Placeholder">
+<Type>%String</Type>
+</Property>
+
+<Property name="ShortDescription">
+<Type>%String</Type>
+</Property>
+
+<Property name="LongDescription">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="500"/>
+</Property>
+
+<Property name="Pattern">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Index name="idxPlaceholder">
+<Properties>Placeholder</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Method name="Create">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	&sql(Delete From iKnow_SetAnalysis.Patterns)
+	&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+	     Values ('#N#','Numeric','replace numeric part and throw away everything after it','(?:\d*[\.\,])?\d+'))
+	&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+         Values ('#NU#','Numeric+Unit','replace numeric part and keep next word','(?:\d*[\.\,])?\d+'))
+	&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+    	 Values ('#NC#','Numeric Concept','replace numeric part and keep everything after it','(?:\d*[\.\,])?\d+'))
+	&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+		 Values ('#TNM#', 'TNM Classification', 'replace tnm classification malignant tumors patterns','t[0-4]?n[0-3]?m[0-4]'))
+	;&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+    ;	 Values ('#D#','Date d/m/yyyy (/.-)','replace only date part','([0]?[1-9]|[1|2][0-9]|[3][0|1])[./-]([0]?[1-9]|[1][0-2])[./-]([0-9]{4}|[0-9]{2})'))
+	;&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+    ;	 Values ('#DT#','Date m/d/yyyy (/.-)','replace only date part','([0]?[1-9]|[1][0-2])[./-]([0]?[1-9]|[1|2][0-9]|[3][0|1])[./-]([0-9]{4}|[0-9]{2})'))
+	&sql(Insert Into iKnow_SetAnalysis.Patterns (PlaceHolder, ShortDescription, LongDescription, Pattern)
+    	 Values ('#D#','Date','replace only date part (d/m/yyyy, m/d/yyyy, /.-)','(([0]?[1-9]|[1|2][0-9]|[3][0|1])[./-]([0]?[1-9]|[1][0-2])[./-]([0-9]{4}|[0-9]{2}))|(([0]?[1-9]|[1][0-2])[./-]([0]?[1-9]|[1|2][0-9]|[3][0|1])[./-]([0-9]{4}|[0-9]{2}))'))
+]]></Implementation>
+</Method>
+
+<Method name="GetPatterns">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Patterns:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	Kill Patterns
+	&sql(Declare C1 Cursor for
+	     Select Placeholder, ShortDescription, LongDescription, Pattern
+	     Into :Placeholder, :ShortDescription, :LongDescription, :Pattern
+	     From iKnow_SetAnalysis.Patterns)
+
+	&sql(Open C1)
+	
+	For iCount=1:1 {
+		&sql(Fetch C1)
+		If SQLCODE'=0 Quit
+		Set Patterns(iCount)=$ListBuild(Placeholder, ShortDescription, LongDescription, Pattern)
+	}
+	&sql(Close C1)
+]]></Implementation>
+</Method>
+
+<Method name="GetPattern">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InputPattern</FormalSpec>
+<Implementation><![CDATA[
+	&sql(Select Pattern Into :Pattern From iKnow_SetAnalysis.Patterns Where Placeholder = :InputPattern)
+	Quit $Select(SQLCODE=0:Pattern, 1:"")
+]]></Implementation>
+</Method>
+
+<Method name="CalculateRule">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InputPattern,firstPart,nextPart</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit ..CalculateInternal(InputPattern, firstPart, InputPattern, nextPart)
+]]></Implementation>
+</Method>
+
+<Method name="CalculateValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InputPattern,firstPart,FoundPattern,nextPart</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	Quit ..CalculateInternal(InputPattern, firstPart, FoundPattern, nextPart, 1)
+]]></Implementation>
+</Method>
+
+<Method name="CalculateInternal">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InputPattern,firstPart,FoundPattern,nextPart,removeFirst:%Boolean=0</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set S = ""
+	If InputPattern = "#NC#" {
+		Set S=$Select(removeFirst:"",1:firstPart)_FoundPattern_nextPart  ;replace numeric part and keep eveything after it
+	} elseif InputPattern="#NU#" {
+		If $E(nextPart,1)=" " Set nextPart=$E(nextPart,2,*)
+		Set S=$Select(removeFirst:"",1:firstPart)_FoundPattern_" "_$Piece(nextPart," ",1)  ;replace numeric part and keep next word
+	} elseif InputPattern="#N#" {
+		Set S=$Select(removeFirst:"",1:firstPart)_FoundPattern  ;replace numeric part and throw away everything after it
+	} elseif InputPattern = "#TNM#" {
+		Set S=FoundPattern
+	} else {
+		Set S=FoundPattern
+	}
+	Quit S
+]]></Implementation>
+</Method>
+
+<Method name="ReplacePatterns">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Patterns,&Rule:%String,&ReplacedPattern:%String,&ReplacedBy:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	If '$Data(Patterns) Do ..GetPatterns(.Patterns)
+	Set iPattern="",ReplacedPattern=""
+	For {
+		Set iPattern=$Order(Patterns(iPattern)) If iPattern="" Quit
+		If Rule[$List(Patterns(iPattern),1) {
+			Set Rule=$Replace(Rule,$List(Patterns(iPattern),1),$List(Patterns(iPattern),4))
+			Set ReplacedPattern=$List(Patterns(iPattern),1)
+			Set ReplacedBy=$List(Patterns(iPattern),4)
+			Quit
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.PatternsD</DataLocation>
+<DefaultData>PatternsDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.PatternsD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.PatternsI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.PatternsS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="PatternsDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Placeholder</Value>
+</Value>
+<Value name="3">
+<Value>ShortDescription</Value>
+</Value>
+<Value name="4">
+<Value>LongDescription</Value>
+</Value>
+<Value name="5">
+<Value>Pattern</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

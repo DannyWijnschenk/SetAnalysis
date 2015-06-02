@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisProject.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+<title>Set Analysis Project</title>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+
+</head>
+
+<body>
+<script langauge="JavaScript" type="text/javascript">
+  function changeDomain(elem) {
+	 var value = elem.options[elem.selectedIndex].text;
+     #server(..ServerMetaField(value))#
+  }
+</script>
+
+
+<script arguments="domain:%String,default:%String" language="Cache" method="GetMetaFields" returntype="%String">
+		Set objDomain=##class(%iKnow.Domain).Open(domain) 
+		Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.Fields, objDomain.Id)
+	 	Set Fields(0)=$ListBuild(,"sourceid")
+	 	Set InnerHtml=""
+	 	Set iField=""
+		For {
+	    	Set iField=$Order(Fields(iField)) If iField="" Quit
+			Set InnerHtml=InnerHtml_"<option "_$Select(default=$List(Fields(iField),2):"selected",1:"")_">"_$List(Fields(iField),2)_"</option>"
+		}
+		Quit InnerHtml
+</script>
+
+<script arguments="value:%String" language="Cache" method="ServerMetaField">
+	Set InnerHtml=..GetMetaFields("MEDDATASET","") ;%session.Get("domainId"))
+	Try {
+	    &javascript< var MetaField = CSPPage.document.getElementById("iKnowMetaField"); >
+		&javascript< MetaField.innerHTML = '#(InnerHtml)#'; >
+	} Catch {
+		Set InnerHtml=InnerHtml_"<option>"_$ZE_"</option>"
+		&javascript< MetaField.innerHTML = '#(InnerHtml)#'; >
+	}
+    Quit
+    
+</script>
+
+<script language="cache" runat="server">
+	Set Name=$Get(%request.Data("Name",1))
+	Set Description=$Get(%request.Data("Description",1))
+	Set iKnowDomain=$Get(%request.Data("iKnowDomain",1))
+	Set iKnowMetaField=$Get(%request.Data("iKnowMetaField",1))
+	Set Resource=$Get(%request.Data("Resource",1))
+</script>
+
+<div class="main">
+<form name="formProject" action="iKnowSetAnalysisProject.csp" method="post">
+  <table>
+    <tr>
+      <td>Project Name : </td>
+      <td><input type="text" name="Name" size="20" value="#($Get(Name))#"/></td>
+    </tr>
+    <tr>
+      <td>Description : </td>
+      <td><input type="text" name="Description" size="80" value="#($Get(Description))#"/></td>
+    </tr>
+    <tr>
+      <td>iKnow Domain : </td>
+      <td>
+        <select name="iKnowDomain" onChange="JavaScript:changeDomain(this);">
+	      <script language="cache" runat="server">
+      		Set objSQL=##class(%SQL.Statement).%New()
+	  		Set Sc=objSQL.%PrepareClassQuery("%iKnow.Domain","GetAllDomains")
+	  		Set objStatement=objSQL.%Execute(1)
+	  		Set domains=0
+	  		While objStatement.%Next() {
+		    	Write "<option ",$Select(iKnowDomain=objStatement.%GetData(2):"selected",1:""),">",objStatement.%GetData(2),"</option>"
+	  		}
+		    Write "<option ",$Select(iKnowDomain="testdom":"selected",1:""),">","testdom","</option>"
+	      </script>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td>iKnow MetaField : </td>
+      <td>
+        <select name="iKnowMetaField" id="iKnowMetaField">
+	      <script language="cache" runat="server">
+			If iKnowDomain'="" {
+				Write ..GetMetaFields("MEDDATASET",iKnowMetaField) ;%session.Get("domainId"))
+			}
+         </script>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td></td><td><button name="Save" Value="save">save</button>
+    </tr>
+  </table>
+</form>
+</div>
+</body>
+</html>
+]]></CSP>
+</Export>

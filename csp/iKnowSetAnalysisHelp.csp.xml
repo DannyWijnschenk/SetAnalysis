@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisHelp.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+
+<title>	iKnow SetAnalysis : Help </title>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+
+</head>
+
+<body>
+  <!---<i>SetAnalysis on Domain <b>#(%session.Get("domainName"))#</b> (#(%session.Get("domainId"))#), based on metadatafield <b>#(%session.Get("metadataField"))#</b></i>--->
+  <div class="tabs">
+  <ul>
+	<li id="tab6"><a href="iKnowSetAnalysis.csp?action=tabproject">Project</a></li>
+	<li id="tab2"><a href="iKnowSetAnalysis.csp?action=tabplugin">Sets</a></li>
+	<li id="tab3"><a href="iKnowSetAnalysis.csp?action=tabformula">Formula</a></li>
+	<li id="tab1"><a href="iKnowSetAnalysis.csp?action=tabfilter">Filter</a></li>
+	<li id="tab4"><a href="iKnowSetAnalysis.csp?action=tabtools">Tools</a></li>
+	<li id="tab5" class="selected"><a href="iKnowSetAnalysisHelp.csp">Help</a></li>
+  </ul>
+  </div>
+  <br>  
+<div class="main">
+
+<table class="help">
+  <tr>
+    <td colspan=2>
+      <b>Goal of the SetAnalysis demo : </b><br>
+      This demo will show you how you can do research on unstructured text. SetAnalysis lets you define sets (cohorts)
+      that combine members with common characteristics.<br>
+      <br>
+      <b>How to Start</b><br>
+      Suppose you want to create sets of patients that take the same medicine, e.g. Perdolan and Ibuprofen.<br>
+      Select the <b>plugin</b> tab, and make sure <b>[Similar]</b> is selected in the list of Plugins (click on the button to get the full list).<br>
+      Enter 'Perdolan' as input and click on Execute.<br>
+      When you get the list of similar concepts for 'Perdolan', you can select the similar concepts from that list, and save the set giving a name.<br>
+      A list with similar concepts will contain concepts like 'Perdolan 200mg' that you want to include, but also concepts like 'Perdolan allergy' which you do not want to include.<br>
+      You will see the list of saved sets on the right hand side, where you will also see the members that
+      are uniquely defined in the set. (e.g. all patientsId's from the documents that have one of the similar concepts)<br>
+      You can also create a set by using a formula : if you have two sets named 'UsePerdolan' and 'UseIbuprofen',
+      you can create a third set (e.g. UseBoth) with the formula 'UsePerdolan and UseIbuprofen'.<br>
+      <br> 
+      <b>Execute or Batch</b><br>
+      Click on Execute to execute the plugin function to retrieve the list of values to choose from.<br>
+      If the function will take some time to complete, you can also launch the Plugin as a Batch in background.<br>
+      You can launch several batches, and see the progress of them in the right hand panel. When a batch is finished, you can select it to continue with the value selection.<br>
+      <br>
+      <b>The %all set</b><br>
+      The <b>%all</b> set is automatically defined and contains all possible members of the iKnow domain.<br>
+      This lets you define e.g. a set of patients where there is no evidence they take both medicines : by using the formula '%all andnot UseBoth'<br> 
+      <b>Tabs : </b>
+      <ul>
+        <li>|Plugin|<br>
+        The plugin tabs let s you create and edit sets by selecting a plugin, giving an intial input value or set, and selecting the items that should belong in the set.
+        </li>
+        <li>|Formula|<br>
+        The Formula tab lets you define sets based on set logic.<br>
+        The implemented operators are : <br>
+        <b>Or</b> : Union of Sets<br>
+        <b>And</b> : Intersection of sets<br>
+        <b>AndNot</b> : Difference between two sets, by substracting all <u>members</u> from set2 from set1<br>
+        <b>AndNotSentence</b> : Difference between two sets, by subtracting all <u>sentences</u> from set2 from set1<br>
+        <b>Score</b> : each member will get a score according the amount of sets in the list it is a member of.<br>
+        <b>Extract</b> : will create sets where each set will contain members based on an extracted value<br>
+              the extracted value is calculated from a list of expressions. This can be a regex to extract a number(e.g. : when concepts have values like 'length is nn cm') 
+        </li>
+        <li>|Filter|<br>
+        iKnow filter on the metadata lets you limit the available sources.
+        </li>
+        <li>|Tools|<br>
+        Miscellaneous tools like recalculating all sets.
+        </li>
+        <li>|Help|<br>
+        This tab.
+        </li>
+        <li>|Detail|<br>
+        The detail tab lists all sets with the selected items and members.<br>
+        For each set, you can see the following :<br>
+          <ul>
+            <li>The defintion of the set (plugin name with input parameter or formula</li>
+            <li>A list of all selected elements (you can toggle with <img src="plus.gif">/<img src="minus.gif"> between the first line or all selected elements)</li>
+            <li>A list of all members that are found for the selected elements. You can toggle with <img src="plus.gif">/<img src="minus.gif"> between the first 5 or all.<br>
+                Members are normally marked in <span class="no_negation">blue</span>. Members that have sentences where <u>all</u> the selected elements are found in negation paths are marked in <span class="all_negation">red</span>, if only <u>some</u> are negated, they are marked in <span class="some_negation">orange</span>.<br>
+                You can export the full member list of the set to excel by clicking on <img src="excel.gif">.</li>
+          </ul>
+        </li>
+        <li>|Overview|<br>
+        This tab will only lists the names of sets and a number representing the number of members in the set.
+        </li>
+        <li>|Treeview|<br>
+        All sets are presented in a hierarchical tree.
+        </li>
+        <li>|EntityLookup|<br>
+        When you are typing at least 3 characters in the input field, this tab will give all similar entities in the iKnow domain.
+        </li>
+        <li>|Dashboard|<br>
+        Contains a dashboard with all sets and their amount of members.
+        </li>
+      </ul>
+      <br>
+      <b>REST interface</b>
+      There is a REST interface avaliable to interrogate the SetAnalysis from outside Caché.<br>
+      http://localhost:1972/csp/[namespace]/rest/api/1 is the root of the URL.<br>
+      Adding ?xml=1 at the end of the URL will give the output in XML (=1 gives default contenttype, =2 gives contenttype=xml), whilst ommitting the parameter will output JSON.    
+    </td>
+  </tr>
+  <tr>
+    <td colspan=2>
+      <b>Plugins</b><br>
+      Plugins are functions you can create yourself and plugin in the SetAnalysis.<br>
+      A plugin will take some parameters, and return a list of key-Value pairs, where the user can select from.<br>
+      A set will contain all the members associated with the selected Key-Value pairs.<br>
+      <br>
+      Following plugins are installed :</td>
+  </tr>
+
+<script language="cache" runat="server">
+	 Do ##class(iKnow.SetAnalysisPlugin).GetActions(.ActionList,,1)
+	 Set iAction="" For {
+	     set iAction=$order(ActionList(iAction),1,Data) If iAction="" Quit
+	 	 write "<tr><td valign='top'><b>",$List(Data,2),"</b></td>"
+	 	 write "<td valign='top'>"_$List(Data,3)_"<br>"_$List(Data,4),"</td></tr>"
+	 }
+</script>
+
+  <tr>
+    <td colspan=2>
+	  <b>How to write your own plugins:</b><br>
+	   Create a Caché class which inherits from iKnow.SetAnalysisPlugin,
+	   Override all the class parameters to give values for Name of the plugin, Description, and various UI settings.
+	   Override following 4 methods :<br>
+	   <br>- the GetPlugin method to build the list of key-value pairs where you want to select items from</br>
+	   <br>- the GetPluginValue to return the Value for a given Id or Key</br>
+	   <br>- the GetPluginId method to return the Id or Key for a given Value</br>
+	   <br>- the SetPluginMembers method to return a set of members (eg. patients) for a set of key-values</br>
+	   <br>After building the new class (and after each modification to the class parameters), call the ##class(iKnow.SetAnalysisPlugin).Create() method to register the new class
+	   <br>
+	</td>
+  </tr>
+  <tr>
+    <td colspan="2">
+    <b>Import sets from file</b><br>
+    You can create sets by importing a text file in tab delimited format.<br>
+    The file can be imported via the Tools tab, or using a classmethod in code.<br>
+    Each line in the file can contain following columns :<br>
+    <ul>
+      <li>Plugin : Name of the plugin to be used (leave this column blanc for a formula)</li>
+      <li>Concept/Formula : Input for the plugin (or formula in case of blanc first column)</li>
+      <li>Based on Set : If plugin is based on another set, you can define the set name here</li>
+      <li>Set Name : Name of the set to be saved</li>
+      <li>DeepSee Enabled : 1 if this set should be visible in DeepSee, 0 otherwise</li>
+      <li>Rest Enabled : 1 if this set should be visible in REST, 0 otherwise</li>
+      <li>Select mode : 1 to select all elements, 0 to select none, + to select only positive paths, - to select only negative paths</li>
+      <li>Inclusive : criteria to select elements</li>
+      <li>Exclusive : criteria to unselect elements</li>
+    </ul>  
+  </tr>
+  <tr>
+    <td colspan="2">
+      Author : Danny Wijnschenk - Sales Engineer - danny.wijnschenk@intersystems.com<br>
+      © Copyright 1996-2014 InterSystems Corporation. All Rights Reserved.<br>
+    <td>
+  </tr>
+</table>
+
+</div>
+</body>
+</html>
+]]></CSP>
+</Export>

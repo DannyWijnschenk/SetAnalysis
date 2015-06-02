@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.GlobalLister">
+<IncludeCode>%IKPublic</IncludeCode>
+<Super>%iKnow.Source.Lister,Utils.Transform</Super>
+<TimeCreated>62929,43819.475271</TimeCreated>
+
+<Method name="DefaultProcessor">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[    quit "%iKnow.Source.Temp.Processor"
+]]></Implementation>
+</Method>
+
+<Method name="ExpandList">
+<FormalSpec>listparams:%List</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.Metadata, ..DomainId)
+	set FieldNames = ""
+	Set iField="" for {
+		set iField = $order(Metadata(iField),1,MetaData) If iField="" Quit
+		set FieldNames = FieldNames _ $list(MetaData,2,2)
+	}
+	set ^dwlog($i(^dwlog))=FieldNames
+	do ..RegisterMetadataKeys(FieldNames)
+
+	Try {
+		Set DocId=""
+		For {
+			Set DocId=$Order(^Import(DocId),1,Data) If DocId="" Quit
+			Set PatientId=$List(Data,1)
+			Set Status=$ListGet(Data,2)
+    	    Set Ref = $ListBuild(i%ListerClassId, ..AddGroup("TXT"), DocId)
+					;Kill Rule
+					;Do ..RemoveRules()
+					;If DocumentType="labresult" Set Rule($I(Rule))=$Lb($lb($C(13),$C(10),"\E"),$lb($C(10)_$C(13)_$C(10)))  ;double CR LF
+					;Set Rule($I(Rule))=$Lb($lb("\D",$C(13),$C(10)),$lb($C(13)_$C(10)_$C(13)))  ;double CR LF
+					;Set Rule($I(Rule))=$Lb($lb("\E",">","\A"), $lb("> "))  ; ., -> . ,
+					;	Set Rule($I(Rule))=$Lb($lb("\E","<dash>","\E"), $lb(""))  ; geen <dash>
+					;Set Rule($I(Rule))=$Lb($lb("\E","<italic>","\E"), $lb(""))  ; geen <italic>
+					;Do ..InitTransform(.Rule)
+
+					;Set sc=..TransForm(.Text)
+			Set iText="",Text=""
+			For {
+				Set iText=$Order(^Import(DocId,"txt",iText),1,TextData) If iText="" Quit
+				Set crlf=$C(13)_$C(10)_$C(13)_$C(10)
+				If $E(Text,*)=":",$Length(TextData)<11 set crlf=" "
+				Set Text=Text_crlf_TextData
+			}
+            set sc = ..SetMetadataValues(Ref, $ListBuild(PatientId,Status))
+	    	set sc = ..StoreTemp(Ref, Text)
+	    	set x=$i(^dwcount)
+		    If $$$ISERR(sc) set ^dwerr($i(^dwerr))=sc
+		}
+	}
+	Catch {
+		Set ^dwlog($i(^dwlog))=$ze
+	}
+	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="GetAlias">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[    Quit "ImportT"
+]]></Implementation>
+</Method>
+
+<Method name="BuildFullRef">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>domainId:%Integer,groupName:%String,localRef:%String</FormalSpec>
+<Private>1</Private>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[	quit groupName _":"_ localRef
+]]></Implementation>
+</Method>
+
+<Method name="SplitFullRef">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>domainId:%Integer,fullRef:%String,*groupName:%String,*localRef:%String</FormalSpec>
+<Private>1</Private>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set groupName=$p(fullRef,":",1)
+	set localRef=$p(fullRef,":",2)
+    Quit $$$OK
+]]></Implementation>
+</Method>
+</Class>
+</Export>

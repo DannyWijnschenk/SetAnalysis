@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.Queries.EntityAPI">
+<Description>
+this class is to provide new functionality that is already in the product,
+but not in all versions where SetAnalysis is supported.
+this class will be obsolete once 2013.2 is released and Setanalysis customers have moved to 2013.2</Description>
+<Super>%iKnow.Queries.EntityAPI</Super>
+<TimeCreated>63056,61090.155806</TimeCreated>
+
+<Method name="GetOccurrencesById">
+<Description>
+This method is in the product since Caché 3013.2.0 build 427 or 2014.1.0 build 208</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&pResult,pDomainId:%Integer,pEntUniIds:%List,pPage:%Integer=0,pPageSize:%Integer=0,pFilter:%iKnow.Filters.Filter="",pAttributeId:%Integer=$$$IKATTNEGATION,vSrcId:%Integer=0]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+                $$$IKQBEGINTRY(pResult,"^||%IK.EntOccIds",tSC)
+                $$$CHECKLICENSEX(tSC)
+                $$$IKCHECKPRIVREADX(tSC)
+                if vSrcId && (pDomainId=0) {} else { $$$CHECKDOMAINEXISTSX(pDomainId,tSC) }
+                
+                
+                if 'vSrcId {
+                                $$$IKQBCHECKX(pDomainId,$lb($$$IKBENTUNIBIT),tSC)
+                }
+                
+                $$$IKQFILTEROBJECTX(pDomainId,pFilter,tSC)
+                $$$IKSETPAGINGVARS(pPage,pPageSize,tUsePaging,tFirst,tLast,tCount)
+                
+                $$$IKENSURELISTNUM(pEntUniIds)
+                set tSC = ..TranslateEntityIdList(pDomainId,pEntUniIds,.tEntIds,vSrcId)
+                quit:$$$ISERR(tSC)
+                
+                if 'vSrcId {
+                                set tEntUniId = ""
+                                for {
+                                                set tEntUniId = $order(tEntIds(tEntUniId))
+                                                quit:tEntUniId=""
+                                                set tGlobName = $name(^ISC.IK.EntUniToOccBit(pDomainId,tEntUniId))
+                                                $$$IKMERGEBITSOR(tGlobName,"^||%IK.EntOccIds")
+                                }
+                                set:$isobject(pFilter) tSC = pFilter.MergeBits("^||%IK.EntOccIds",$$$IKFENTOCC)
+                                quit:$$$ISERR(tSC)
+                                
+                                set tOffset=""
+                                for {
+                                                set tOffset = $order(^||%IK.EntOccIds(tOffset), 1, tEntOccBits)
+                                                quit:tOffset=""
+                                                
+                                                set tPos = 0
+                                                for {
+                                                                set tPos = $bitfind(tEntOccBits, 1, tPos+1)
+                                                                quit:'tPos
+                                                                
+                                                                $$$IKGETIDOFFPOS(tEntOccId,tOffset,tPos)
+                                                                
+                                                                set tEntOcc = ^ISC.IK.EntOccId(pDomainId,tEntOccId)
+                                                                set tSentId = $li(tEntOcc,3)
+                                                                set tSourceId = ##class(%iKnow.Queries.SentenceAPI).GetSourceId(pDomainId, tSentId)
+                                                                
+                                                                set tIsAttributed = $s(pAttributeId:..IsAttributedInternal(pDomainId, tEntOccId, pAttributeId, tEntOcc), 1:"")
+                                                                
+                                                                set tCount = tCount+1
+                                                                $$$IKCHECKPAGING(tUsePaging,tFirst,tLast,tCount)
+                                                                $$$IKQADDRESULT(pResult,tCount,$lb(+tEntOccId, $li(tEntOcc,1), $li(tEntOcc,2), tSentId, tSourceId, tIsAttributed))
+                                                }
+                                                $$$IKCHECKPAGING(tUsePaging,0,tLast,tCount)
+                                }
+                                
+                } else {
+                                
+                                $$$CHECKVSRCIDEXISTSX(pDomainId,vSrcId,tSC)
+                                
+                                set tEntOccId = ""
+                                for {
+                                                set tEntOccId = $order(^ISC.IKV.EntOccId(pDomainId, vSrcId, tEntOccId), 1, tEntOcc)
+                                                quit:tEntOccId=""
+                                                
+                                                set tEntUniId = $li(tEntOcc,1)
+                                                continue:'$d(tEntIds(tEntUniId))
+                                                
+                                                set tIsAttributed = $s(pAttributeId:..IsAttributedInternal(pDomainId, tEntOccId, pAttributeId, tEntOcc, vSrcId), 1:"")
+                                                
+                                                set tCount = tCount+1
+                                                $$$IKCHECKPAGING(tUsePaging,tFirst,tLast,tCount)
+                                                $$$IKQADDRESULT(pResult,tCount,$lb(+tEntOccId, tEntUniId, $li(tEntOcc,2), tSentId, vSrcId, tIsAttributed))
+                                }
+                }
+                
+                $$$IKQENDCATCH(pResult,"^||%IK.EntOccIds",tSC)
+]]></Implementation>
+</Method>
+</Class>
+</Export>

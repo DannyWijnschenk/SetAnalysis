@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisDS">
+<TimeCreated>63006,43051.934216</TimeCreated>
+
+<Method name="GenerateData">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainName:%String</FormalSpec>
+<Implementation><![CDATA[
+	If DomainName="" Quit
+	Set objDomain=##class(%iKnow.Domain).Open(DomainName)
+	If objDomain="" write !,"Domain does not exist",! Quit
+	Set DomainId=objDomain.Id
+	Set MetaFieldID=$Get(^iKnow.SetAnalysis(DomainId))
+	If MetaFieldID="" Write "pls create first a set with SetAnalysis so i can determine which metafield will be the Id.",! Quit
+	//get metafields
+	//create class 'Data.'_DomainName with metafields as properties
+	//populate class with metavalues
+
+	
+	Do ##class(%iKnow.Queries.MetadataAPI).GetFields(.result, DomainId)
+	Set iField=""
+	For {
+		Set iField=$Order(result(iField),1,Data) If iField="" Quit
+		Set FieldName=$List(Data,2)
+		Write "Include ",FieldName," (Y/N) [Default=Yes] ? "
+		If FieldName=MetaFieldID {
+			Set YesNo="Y" Write "Y"
+		} else {
+			Read YesNo
+		}
+		Write !
+		If YesNo="" Set YesNo="Y"
+		If $E($ZCVT(YesNo,"U"),1)="Y" {
+			Set FieldType=$List(Data,4)  ;STRING, NUMBER, DATE
+			Set FieldType=$S(FieldType="NUMBER":"%Numeric",FieldType="DATE":"%Date",1:"%String")
+			Set Properties($I(Properties))=$ListBuild(FieldName, FieldType,$List(Data,1),FieldName=MetaFieldID)
+		}
+	}
+	
+	Write !!,"this will generate following classes : ",!
+	Write "Data Classname    :  ","Data."_DomainName,!
+	Write "Properties        :  "
+	Set iProp=""
+	For {
+		Set iProp=$Order(Properties(iProp)) If iProp="" Quit
+		Write ?21,$List(Properties(iProp),1),?40,$List(Properties(iProp),2),!
+	}
+	Write "DeepSee Classname :  ","DeepSee.cube"_DomainName,!
+
+	For {
+		Write !,"Are you sure to continue (Y/N) ? " Read Ok
+		If (",Y,N,")[(","_$E($ZCVT(Ok,"U"),1)_",") Quit
+	}
+	
+	If $E($ZCVT(Ok,"U"),1)="Y" {
+	
+		//Get metafieldId name from SetAnalysis for ID
+		Do ..CreateClass("Data."_DomainName, .Properties)
+		Do ..PopulateClass(DomainId,"Data."_DomainName, .Properties)
+		Do ..CreateDSClass("cube"_DomainName,"DeepSee.cube"_DomainName,"Data."_DomainName, .Properties)
+		Write !
+		Write "Edit the class 'DeepSee.cubeSetMembers', and insert following line : ",!
+		Write "  <relationship sourceProperty=""Member"" name=""cube"_DomainName_""" disabled=""false"" relatedCube=""cube"_DomainName_""" inverse=""cubeSetMembers"" cardinality=""one""></relationship>",!
+		Write !!
+		Write "Press Enter when this is done ..." r Ok
+		Write !!
+		Do ##class(%DeepSee.Utils).%BuildCube("cube"_DomainName)
+		Do ##class(%DeepSee.Utils).%BuildCube("cubeSetMembers")
+	} else {
+		Write " aborted ...",!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="CreateClass">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[Name:%String,&Properties:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	Set objClass = ##class(%Dictionary.ClassDefinition).%New(Name)
+	If $SYSTEM.Status.IsError(objClass)  {
+    	Do $system.Status.DecomposeStatus(%objlasterror,.Err)
+ 		Write !, Err(Err)
+ 	}
+	Set objClass.Super = "%Persistent"
+
+	// add properties
+	Set iProp=""
+	For {
+		Set iProp=$Order(Properties(iProp)) If iProp="" Quit
+		Set objProperty = ##class(%Dictionary.PropertyDefinition).%New(Name_":"_$tr($List(Properties(iProp),1)," "))
+		If $SYSTEM.Status.IsError(objProperty)  {
+			Do $system.Status.DecomposeStatus(%objlasterror,.Err) 
+  			Write !,Err(Err)
+		}
+ 
+ 		Do objClass.Properties.Insert(objProperty)
+		Set objProperty.Type=$List(Properties(iProp),2)
+		If $List(Properties(iProp),4)=1 {
+			Set objIndex=##class(%Dictionary.IndexDefinition).%New(Name_":IdxKey")
+			Set objIndex.Properties=$TR($List(Properties(iProp),1)," ")
+			Set objIndex.IdKey=1
+			Set objIndex.Unique=1
+			Do objClass.Indices.Insert(objIndex)
+		}
+		
+	}
+	// save the class definition object
+ 	Do objClass.%Save()
+ 	set sc = $system.OBJ.Compile(objClass.Name)
+	If $SYSTEM.Status.IsError(sc)  {
+		Do $system.Status.DecomposeStatus(%objlasterror,.Err) 
+  		Write !,Err(Err)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="PopulateClass">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[DomainId:%Integer,Name:%String,&Properties:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	
+	Set objSQL=##class(%SQL.Statement).%New()
+	Set sc = objSQL.%Prepare("Delete From "_Name)
+	If $SYSTEM.Status.IsError(sc)  {
+		Do $system.Status.DecomposeStatus(%objlasterror,.Err) 
+  		Write !,Err(Err)
+	}
+	Set objResult = objSQL.%Execute()
+
+	Set SQL="Insert Into "_Name_" ("
+	Set iProp=""
+	For {
+		Set iProp=$Order(Properties(iProp),1,Data) If iProp="" Quit
+		Set SQL=SQL_$Select($E(SQL,*)="(":"",1:",")_$TR($List(Properties(iProp),1)," ")
+	}
+	Set SQL=SQL_") Values ("
+	;Write !,SQL,!	
+
+	set globName = "^||TempSources"
+	set tSC = ##class(%iKnow.Queries.SourceAPI).GetByDomain(globName, DomainId, 0, 0)
+	quit:$$$ISERR(tSC) tSC
+	Set Count=0
+	set iSrc=""
+	for {
+		set iSrc = $order(@globName@(iSrc),1,Data)
+		quit:iSrc=""
+		set srcId = $list(Data,1)
+		write "."
+		Set iProp=""
+		Set ThisSQL=SQL
+		For {
+			Set iProp=$Order(Properties(iProp),1,Data) If iProp="" Quit
+			Set Value = ##class(%iKnow.Queries.MetadataAPI).GetValueById(DomainId, $List(Data,3), srcId)
+			If $List(Properties(iProp),2)="%Date" Set Value=+Value
+			Set ThisSQL=ThisSQL_$Select($E(ThisSQL,*)="(":"",1:",")_"'"_$TR(Value,"'","")_"'"
+		}
+		Set ThisSQL=ThisSQL_")"
+		Set objSQL=##class(%SQL.Statement).%New()
+		Set objResult = objSQL.%ExecDirect(,ThisSQL)
+		If objResult.%SQLCODE'=0 {
+  			Write !,"SQL: ",ThisSQL
+  			Write !,"Error : ",objResult.%Message
+		} else {
+			Set Count=Count+1
+  			;Write !,"SQL: ",ThisSQL, " : ",!
+		}
+		
+	}
+	kill @globName
+	Write !,Count," records saved in ",Name,!
+]]></Implementation>
+</Method>
+
+<Method name="CreateDSClass">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[cubeName:%String,DSName:%String,DataName:%String,&Properties:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	Set objClass = ##class(%Dictionary.ClassDefinition).%New(DSName)
+	If $SYSTEM.Status.IsError(objClass)  {
+    	Do $system.Status.DecomposeStatus(%objlasterror,.Err)
+ 		Write !, Err(Err)
+ 	}
+	Set objClass.Super = "%DeepSee.CubeDefinition"
+	Set objClass.DependsOn = DataName
+	Set objClass.ProcedureBlock = 1
+
+	Set objParam = ##class(%Dictionary.ParameterDefinition).%New(DSName_":DOMAIN")
+	Do objClass.Parameters.Insert(objParam)
+
+	Set objXData = ##class(%Dictionary.XDataDefinition).%New(DSName_":Cube")
+	Do objClass.XDatas.Insert(objXData)
+	Do objXData.Data.Clear()
+	Do objXData.Data.WriteLine("<cube xmlns=""http://www.intersystems.com/deepsee"" name="""_cubeName_""" displayName="""_cubeName_""" disabled=""false"" abstract=""false"" sourceClass="""_DataName_""" countMeasureName=""%COUNT"" bucketSize=""8"" bitmapChunkInMemory=""false"" precompute=""0"">")
+	;;insert dimension for important properties, not for the key !
+	Set iProp=""
+	For {
+		Set iProp=$Order(Properties(iProp)) If iProp="" Quit
+		If $List(Properties(iProp),4)=0 {  //not the key
+			Set FieldName=$TR($List(Properties(iProp),1)," ")
+			Set FieldType=$List(Properties(iProp),2)
+			If FieldType="%Date" {
+				Do objXData.Data.WriteLine("  <dimension name="""_FieldName_""" disabled=""false"" hasAll=""false"" allCaption=""All "_FieldName_""" allDisplayName="""_FieldName_""" sourceProperty="""_FieldName_""" type=""time"" hidden=""false"" showHierarchies=""default"">")
+				Do objXData.Data.WriteLine("    <hierarchy name=""H1"" disabled=""false"">")
+				Do objXData.Data.WriteLine("      <level name="""_FieldName_""" disabled=""false"" timeFunction=""Year"" list=""false"" useDisplayValue=""true"">")
+				Do objXData.Data.WriteLine("      </level>")
+				Do objXData.Data.WriteLine("    </hierarchy>")
+				Do objXData.Data.WriteLine("  </dimension>")
+			} else {
+			;
+				Do objXData.Data.WriteLine("  <dimension name="""_FieldName_""" disabled=""false"" hasAll=""false"" allCaption=""All "_FieldName_""" allDisplayName="""_FieldName_""" type=""data"" hidden=""false"" showHierarchies=""default"">")
+				Do objXData.Data.WriteLine("    <hierarchy name=""H1"" disabled=""false"">")
+				Do objXData.Data.WriteLine("      <level sourceProperty="""_FieldName_""" name="""_FieldName_""" disabled=""false"" list=""false"" useDisplayValue=""true"">")
+				Do objXData.Data.WriteLine("      </level>")
+				Do objXData.Data.WriteLine("    </hierarchy>")
+				Do objXData.Data.WriteLine("  </dimension>")
+			}
+		}
+	}
+	//relationship with SetAnalysis cube:
+	Do objXData.Data.WriteLine("<relationship name=""cubeSetMembers"" disabled=""false"" relatedCube=""cubeSetMembers"" inverse="""_cubeName_""" cardinality=""many""></relationship>")
+	Do objXData.Data.WriteLine("</cube>")	
+	// save the class definition object
+ 	Do objClass.%Save()
+ 	set sc = $system.OBJ.Compile(objClass.Name)
+	If $SYSTEM.Status.IsError(sc)  {
+		Do $system.Status.DecomposeStatus(%objlasterror,.Err) 
+  		Write !,Err(Err)
+	}
+]]></Implementation>
+</Method>
+</Class>
+</Export>

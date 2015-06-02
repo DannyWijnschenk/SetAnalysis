@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Sets">
+<IncludeCode>%IKPublic</IncludeCode>
+<Super>%Persistent</Super>
+<TimeCreated>62897,65699.045669</TimeCreated>
+
+<Property name="ProjectId">
+<Description>
+Project where this set belongs too</Description>
+<Type>iKnow.SetAnalysis.Projects</Type>
+</Property>
+
+<Property name="Name">
+<Description>
+Name of the set</Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="Plugin">
+<Description>
+Plugin which is used for getting elements</Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="Input">
+<Description>
+Input parameter for the plugin</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="32000"/>
+</Property>
+
+<Property name="OnSet">
+<Description>
+Input for this set can be based on output of another set</Description>
+<Type>iKnow.SetAnalysis.Sets</Type>
+</Property>
+
+<Property name="Calculated">
+<Description>
+Is this set a formula</Description>
+<Type>%Integer</Type>
+</Property>
+
+<Property name="DeepSeeEnabled">
+<Description>
+Is this set exposed in the DeepSee calculated dimension</Description>
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="RestEnabled">
+<Description>
+Is this set exposed through the REST interface</Description>
+<Type>%Boolean</Type>
+</Property>
+
+<Property name="GroupName">
+<Description>
+calculated group (before the dot, can be multiple)</Description>
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<SqlComputeCode>Set {GroupName}=$Select({Name}'[".":"root",1:$Piece({Name},".",1,$Length({Name},".")-1))</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+</Property>
+
+<Property name="SetName">
+<Description>
+calculated name (the last part of the name after last dot)</Description>
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<SqlComputeCode>Set {SetName}=$Piece({Name},".",$Length({Name},"."))</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+</Property>
+
+<Property name="Pattern">
+<Type>%String</Type>
+</Property>
+
+<Property name="Description">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="500"/>
+</Property>
+
+<Index name="idxDomName">
+<Properties>ProjectId,Name</Properties>
+</Index>
+
+<Method name="Populate">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set Set=""
+	For  {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		Do ..SaveSet(ProjectId, Set)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	&sql(Select Id Into :Id From iKnow_SetAnalysis.Sets Where (ProjectId=:ProjectId) and (Name = :Set))
+	Quit $S(SQLCODE=0:Id,1:"")
+]]></Implementation>
+</Method>
+
+<Method name="RemoveSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,Set:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set SetId=..GetId(ProjectId, Set)
+	If SetId="" Quit
+	&sql(Delete iKnow_SetAnalysis.SetMemberSourceSentences where SetId = :SetId)
+	&sql(Delete iKnow_SetAnalysis.SetMemberSources where SetId = :SetId)
+	&sql(Delete iKnow_SetAnalysis.SetMembers where SetId = :SetId)
+	&sql(Delete iKnow_SetAnalysis.SetKeyValues where SetId = :SetId)
+	&sql(Delete iKnow_SetAnalysis.Sets where Id = :SetId)
+	&sql(Delete iKnow_SetAnalysis.SetKeyValueMembers where SetName = :Set)
+	Do ##class(iKnow.SetAnalysis.Members).RemoveSet(ProjectId,Set)
+]]></Implementation>
+</Method>
+
+<Method name="SaveSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,Set:%String</FormalSpec>
+<Implementation><![CDATA[
+	Try {
+		Set Now = +$H
+		&sql(Update iKnow_SetAnalysis.Projects Set Modified = :Now Where ID = :ProjectId)
+		Set SetId=..GetId(ProjectId, Set)
+		If SetId="" {
+			Set objSet=##class(iKnow.SetAnalysis.Sets).%New()
+			Do objSet.ProjectIdSetObjectId(ProjectId)
+			Set objSet.Name = Set
+		} else {
+			Set objSet=##class(iKnow.SetAnalysis.Sets).%OpenId(SetId)
+		}
+		Set Definition=$Get(^iKnow.SetAnalysis(ProjectId, Set, "D", 1))
+		;$lb(0, PluginId, "Input", "Set") or $lb(1,, "SETA or SETB")
+		Set objSet.Calculated = $ListGet(Definition,1)
+		Set objSet.Plugin = $ListGet(Definition, 2)
+		Set objSet.Input = $ListGet(Definition, 3)
+		Set objSet.DeepSeeEnabled = +$ListGet(Definition,5)
+		Set objSet.RestEnabled = +$ListGet(Definition,6)
+		Set objSet.Pattern = $ListGet(Definition,7)
+		Set objSet.Description = $ListGet(Definition,8)
+		If $ListGet(Definition, 4) = "" {
+			Set objSet.OnSet = ""
+		} else {
+			Do objSet.OnSetSetObjectId(..GetId(ProjectId, $ListGet(Definition, 4)))
+		}
+		Set Sc = objSet.%Save()
+		If Sc'=1 {
+			Do $SYSTEM.Status.DecomposeStatus(Sc, .err)
+			Do ##class(iKnow.SetAnalysis).Log("Error Saving class Sets "_$Get(Set)_" : "_$Get(err(1)))
+			Throw Sc
+		}
+		Set SetId = objSet.%Id()
+			
+		#;If domain is a DeepSee managed domain, and metafield is sourceid, we will convert the member id to the id of the table the cube is based on
+		#;to allow cubes to be related by Id (since there are no other metafields available, and factid does not help)
+		&sql(Select iKnowDomain, iKnowMetafield Into :iKnowDomain, :iKnowMetafield From iKnow_SetAnalysis.Projects Where Id = :ProjectId)
+
+		Set objDomain=##class(%iKnow.Domain).Open(iKnowDomain)
+		Set DomainId = objDomain.Id
+		If iKnowMetafield="sourceid" {
+			If objDomain.GetParameter($$$IKPDEEPSEEDOMAIN) {
+				Set ConvertMember=objDomain.GetParameter("DS:CubeName")
+			} else {
+				Set ConvertMember=""
+			}
+		} else {
+			Set ConvertMember=""
+		}
+
+
+		&sql(Delete iKnow_SetAnalysis.SetMemberSourceSentences where SetId = :SetId)
+		&sql(Delete iKnow_SetAnalysis.SetMemberSources where SetId = :SetId)
+		&sql(Delete iKnow_SetAnalysis.SetMembers where SetId = :SetId)
+		&sql(Delete iKnow_SetAnalysis.SetKeyValues where SetId = :SetId)
+
+		Do ##class(iKnow.SetAnalysis.Members).RemoveSet(ProjectId,Set)
+
+		Set Member=""
+		For  {
+			Set Member=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member)) If Member="" Quit
+			Set Data=$Get(^iKnow.SetAnalysis(ProjectId, Set, "P", Member))
+			Set Score=$ListGet(Data,1)
+			Set ScoreSets=$ListGet(Data,2)
+			If ScoreSets'="" Set ScoreSets=$ListToString(ScoreSets,",")
+			Set Frequency=0
+			Set Src="" For {
+				Set Src=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, Src)) If Src="" Quit
+				Set Sent="" For {
+					Set Sent=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, Src, Sent)) If Sent="" Quit
+					Set Frequency=Frequency+1
+				}
+			}
+			Set ThisMember=$Select(ConvertMember="":Member,1:##class(%iKnow.DeepSee.CubeUtils).GetSourceObjectId(ConvertMember,Member))
+			&sql(Insert Into iKnow_SetAnalysis.SetMembers (SetId, Member, Score, ScoreSets, Frequency )
+			     Values (:SetId, :ThisMember, :Score, :ScoreSets, :Frequency))
+			Set MemberId = %ROWID
+			Set Src="" For {
+				Set Src=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, Src)) If Src="" Quit
+				&sql(Insert Into iKnow_SetAnalysis.SetMemberSources (SetId, MemberId, SourceId, Member)
+			     	 Values (:SetId, :MemberId, :Src, :Member))
+				Set MemberSourceId = %ROWID
+				Set Sent="" For {
+					Set Sent=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, Src, Sent)) If Sent="" Quit
+					If $Get(^iKnow.SetAnalysisOptions("SENTENCES"))=1 {
+						Set Sentence = ##class(%iKnow.Queries.SentenceAPI).GetValue(DomainId, Sent)
+					}
+				    &sql(Insert Into iKnow_SetAnalysis.SetMemberSourceSentences (SetId, SourceId, SentenceId, Member, Sentence)
+			     	     Values (:SetId, :MemberSourceId, :Sent, :Member, :Sentence))
+				}
+			}
+			     
+			     
+			Do ##class(iKnow.SetAnalysis.Members).InsertSet(ThisMember, ProjectId, Set)
+		}
+
+		Set Value=""
+		For {
+			Set Value=$Order(^iKnow.SetAnalysis(ProjectId, Set, "X", Value),1,Key) If Value="" Quit
+			Set InSelection=$Data(^iKnow.SetAnalysis(ProjectId, Set, "E", Value))
+			&sql(Insert Into iKnow_SetAnalysis.SetKeyValues (SetId, KeyId, Value, InSelection)
+			     Values (:SetId, :Key, :Value, :InSelection))
+		}
+		
+		
+		Set Member=""
+		For {
+			Set Member=$Order(^iKnow.SetAnalysis(ProjectId, Set, "M", Member)) If Member="" Quit
+			Set Key=""
+			For {
+				Set Key=$Order(^iKnow.SetAnalysis(ProjectId, Set, "M", Member, Key)) If Key="" Quit
+				&sql(Select Value into :Value from iKnow_SetAnalysis.SetKeyValues Where SetId = :SetId and KeyId=:Key)
+				;Set Value=$Get(^iKnow.SetAnalysis(ProjectId, Set, "X", Key))
+				If SQLCODE'="" {
+					Set ThisMember=$Select(ConvertMember="":Member,1:##class(%iKnow.DeepSee.CubeUtils).GetSourceObjectId(ConvertMember,Member))
+					&sql(Insert Into iKnow_SetAnalysis.SetKeyValueMembers (SetName, KeyId, Value, Member)
+			     	Values (:Set, :Key, :Value, :ThisMember))
+				}
+			}
+		}
+		
+		//TODO : also populate SentenceId and SourceId in classes SetMemberSources and Set MemberSourceSentences
+	} catch {
+		Do ##class(iKnow.SetAnalysis).Log("Error in SaveSet for set "_$Get(Set)_" : "_$ZE)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.SetsD</DataLocation>
+<DefaultData>SetsDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.SetsD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.SetsI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.SetsS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetsDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>ProjectId</Value>
+</Value>
+<Value name="3">
+<Value>Name</Value>
+</Value>
+<Value name="4">
+<Value>Definition</Value>
+</Value>
+<Value name="5">
+<Value>Plugin</Value>
+</Value>
+<Value name="6">
+<Value>Input</Value>
+</Value>
+<Value name="7">
+<Value>OnSet</Value>
+</Value>
+<Value name="8">
+<Value>Calculated</Value>
+</Value>
+<Value name="9">
+<Value>DeepSeeEnabled</Value>
+</Value>
+<Value name="10">
+<Value>RestEnabled</Value>
+</Value>
+<Value name="11">
+<Value>Pattern</Value>
+</Value>
+<Value name="12">
+<Value>Description</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Storage.SetRepApi">
+<TimeCreated>63428,48599.031161</TimeCreated>
+
+<Method name="ExistsInSetAnalysis">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>SetRepClass:%String,SetRepName:%String</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	#Dim Exists as %Boolean = 0
+	#Dim SetName, SetType, ProjectId as %String
+	;open set in setrep
+	Set SetName=$Piece(SetRepName,".",2,*)
+	Set SetType=$Piece(SetName,":",2),SetName=$Piece(SetName,":",1)  ;Entities, Elements, Sources
+	Set ProjectId=..GetAttribute(SetRepClass, SetRepName,"PROJECTID")
+	If ProjectId="" Set ProjectId=..GetAttribute(SetRepClass, $Piece(SetRepName,":",1)_":Entities","PROJECTID")
+
+	If (SetName="")!(ProjectId="") {
+		Set Exists=0
+	} elseif SetType="Entities" {
+		;should exist as ProjectId,SetName,"E"
+		Set Exists=$Data(^iKnow.SetAnalysis(ProjectId, SetName, "E"))
+	} elseif SetType="Elements" {
+		;should exist as ProjectId,SetName,"P"
+		Set Exists=$Data(^iKnow.SetAnalysis(ProjectId, SetName, "P"))
+	} elseif SetType="Sources" {
+		;is a byproduct of SetName, "P"	
+		;should exist as ProjectId,SetName,"P"
+		Set Exists=$Data(^iKnow.SetAnalysis(ProjectId, SetName, "P"))
+	} else {
+		;just test on ProjectId,SetName
+		Set Exists=$Data(^iKnow.SetAnalysis(ProjectId, SetName))
+	}	
+	set ^dwdebug($i(^dwdebug))=SetRepName_" : "_Exists
+	Quit Exists
+]]></Implementation>
+</Method>
+
+<Method name="GetAttribute">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>SetRepClass,SetRepName,Attribute</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#Dim objSet as %DeepSee.Sets.ArraySetRepository
+	#Dim objArray as %ArrayOfDataTypes
+	Set objSet=$ClassMethod(SetRepClass,"GetByName",SetRepName)
+	If objSet="" Quit ""
+	Set objArray = objSet.GetAnnotation()
+	If objArray="" Quit ""
+	Quit objArray.GetAt(Attribute)
+]]></Implementation>
+</Method>
+</Class>
+</Export>

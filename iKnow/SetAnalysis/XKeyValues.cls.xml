@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.XKeyValues">
+<Super>%Persistent</Super>
+<TimeCreated>63236,54576.728363</TimeCreated>
+
+<Property name="ProjectId">
+<Type>iKnow.SetAnalysis.Projects</Type>
+</Property>
+
+<Property name="Member">
+<Type>%String</Type>
+</Property>
+
+<Property name="XKey">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Property name="XValue">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Property name="Sentence">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="20000"/>
+</Property>
+
+<Property name="SourceId">
+<Type>%String</Type>
+</Property>
+
+<Index name="idxXKey">
+<Properties>ProjectId,XKey,Member</Properties>
+</Index>
+
+<Index name="idxMember">
+<Properties>Member,XKey</Properties>
+</Index>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.XKeyValuesD</DataLocation>
+<DefaultData>XKeyValuesDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.XKeyValuesD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.XKeyValuesI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.XKeyValuesS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="XKeyValuesDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Member</Value>
+</Value>
+<Value name="3">
+<Value>XKey</Value>
+</Value>
+<Value name="4">
+<Value>XValue</Value>
+</Value>
+<Value name="5">
+<Value>Sentence</Value>
+</Value>
+<Value name="6">
+<Value>SourceId</Value>
+</Value>
+<Value name="7">
+<Value>ProjectId</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

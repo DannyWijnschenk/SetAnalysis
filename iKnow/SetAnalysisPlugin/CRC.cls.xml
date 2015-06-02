@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.CRC">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63407,56085.251602</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>3</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>3</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>CRC</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[Returns all iKnow CRCs (Concept|Relation|Concept) where the given concept is part of.<br>Enter a concept OR an existing Set.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Concept</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>concept|relation|concept</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Set</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>50</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>CRC</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set sc=$$$OK
+ 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+ 	If InputSet'="" {
+		Kill result
+		Set Input=""
+		Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
+		For  {
+			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
+			Kill resultInput
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.resultInput, DomainId, $lb(Input), 0, , objFilter)
+			Set iCount=""
+			For  {
+				Set iCount=$Order(resultInput(iCount)) If iCount="" Quit
+				Set result($i(result))=resultInput(iCount)
+			}
+		}
+	} else {
+		If $Length(Input,"|")=3 {
+			Kill tempresult
+			;TODO : if 3 different inputs, should be AND, unless wildcard *
+			Set Wildcard=0
+			For iPiece=1:1:3 {
+				Set Wildcard(iPiece)=$Case($Piece(Input,"|",iPiece),"":1,"*":1,:0)
+				If Wildcard(iPiece) Set Wildcard=1
+			}
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",1),","), 0, , objFilter,,$$$USEPOSM)
+			Merge result=tempresult
+			set result=$Order(result(""),-1)
+	
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",2),","), 0, , objFilter,,$$$USEPOSR)
+			If Wildcard(1) {  //all results from 2 are valid
+				Set iResult="" For {
+					Set iResult=$Order(tempresult(iResult)) If iResult="" Quit
+					Set result($i(result))=tempresult(iResult)
+				}
+			} elseif 'Wildcard(2) {  //no wildcards in 1 or 2 : need to be AND
+				Set iResult="" For {
+					Set iResult=$Order(result(iResult)) if iResult="" Quit
+					Set Found=0 Set jResult="" For {
+						Set jResult=$Order(tempresult(jResult)) If jResult="" Quit
+						  If $List(tempresult(jResult),1)=$List(result(iResult),1) Set Found=1
+					}
+					If 'Found Kill result(iResult)		
+				}
+			}
+
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.tempresult, DomainId,  $ListFromString($Piece(Input,"|",3),","), 0, , objFilter,,$$$USEPOSS)
+			If Wildcard(1) & Wildcard(2) {
+				Set iResult="" For {
+					Set iResult=$Order(tempresult(iResult)) If iResult="" Quit
+					Set result($i(result))=tempresult(iResult)
+				}
+			} elseIf 'Wildcard(3) {  //need to be AND
+				Set iResult="" For {
+					Set iResult=$Order(result(iResult)) if iResult="" Quit
+					Set Found=0 Set jResult="" For {
+						Set jResult=$Order(tempresult(jResult)) If jResult="" Quit
+						  If $List(tempresult(jResult),1)=$List(result(iResult),1) Set Found=1
+					}
+					If 'Found Kill result(iResult)		
+				}
+			}
+		} else {
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.result, DomainId, $ListFromString(Input,","), 0, , objFilter)
+		}
+	}
+
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Kill ^||iKnow.SetAnalysisTemp
+	Set iCount="" For {
+		Set iCount=$Order(result(iCount),1,data) If iCount="" Quit
+		set crc=$list(data,2)_"|"_$list(data,3)_"|"_$list(data,4)
+		If InputPattern'="" {
+			Set crc=..ReplacePattern($List(data,2),InputPattern)_"|"_..ReplacePattern($List(data,3),InputPattern)_"|"_..ReplacePattern($List(data,4),InputPattern)
+		}
+		Set frequency=$List(data,5)
+		Set ^||iKnow.SetAnalysisTemp(crc)=$Get(^||iKnow.SetAnalysisTemp(crc))+frequency
+		Set ^||iKnow.SetAnalysisTemp(crc,$list(data,1))=$list(data,5)
+	}
+	Set crc=""
+	For {
+		Set crc=$Order(^||iKnow.SetAnalysisTemp(crc)) If crc="" Quit
+		Set frequency=^||iKnow.SetAnalysisTemp(crc)
+		Set sort=" "_$J(99999999-frequency,8)_$ZCVT(crc,"U")
+		Set crcId="",crcIdList=""
+		For {
+			Set crcId=$Order(^||iKnow.SetAnalysisTemp(crc,crcId)) If crcId="" Quit
+			Set crcIdList=crcIdList_$ListBuild(crcId)
+			Set resultEnt=resultEnt+1
+		}
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,crcIdList)=$ListBuild(crc_" [ "_frequency_" ]")
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set Value = ##class(%iKnow.Queries.CrcAPI).GetValue(DomainId, Id)
+	Quit $List(Value,1)_"|"_$List(Value,2)_"|"_$List(Value,3)
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.CrcAPI).GetId(DomainId, $Piece(Value,"|",1), $Piece(Value,"|",2), $Piece(Value,"|",3))
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+	Do ##class(iKnow.SetAnalysis).BuildFilterFromSet(ProjectId, SaveSet,.objFilter)
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		If '$ListValid(id) Set entList=$lb(id)
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByCrcIds(.result, DomainId, entList, 0,,objFilter)
+		Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.result)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

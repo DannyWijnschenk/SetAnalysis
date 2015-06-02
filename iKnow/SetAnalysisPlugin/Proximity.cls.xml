@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.Proximity">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63407,60400.671761</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>9</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>6</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>Proximity</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default>This plugin will return all Concepts that most likely occurr in close relationship to the provided concept.</Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Concept</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>type an existing concept</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Set</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>70</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>ENTITY</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set sc=$$$OK
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	If InputSet'="" {
+		Kill result
+		Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
+		Set Input=""
+		For  {
+			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
+			Set EntityId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Input)
+			Kill resultInput
+			Set sc = ##class(%iKnow.Semantics.ProximityAPI).GetProfileForEntity(.resultInput, DomainId, EntityId, 0)
+			Set iCount=""
+			For  {
+				Set iCount=$Order(resultInput(iCount)) If iCount="" Quit
+				Set result($i(result))=resultInput(iCount)
+			}
+		}
+	} else {
+		Set EntityId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Input)
+		Set sc = ##class(%iKnow.Semantics.ProximityAPI).GetProfileForEntity(.result, DomainId, EntityId, 0)
+	}
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Set iCount="" For {
+		Set iCount=$Order(result(iCount),1,data) If iCount="" Quit
+		Set sort=" "_$J(99999999-$list(data,3),8)_$ZCVT($list(data,2),"U")
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,$list(data,1))=$ListBuild($list(data,2)_" [ "_$list(data,3)_" ]")
+		Set resultEnt=resultEnt+1
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Value)
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Try {
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+		If fieldName'="" {
+			Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+		} else {
+			Set fieldId=""
+		}
+		Set ProxEntity=$List(^iKnow.SetAnalysis(ProjectId, SaveSet, "D", 1), 3)
+		Set ProxEntityId = ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, ProxEntity)
+		Do ##class(iKnow.SetAnalysis).BuildFilterFromSet(ProjectId, SaveSet,.objFilter)
+		Set Value="" For  {
+			Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+			Set entList=$lb(id, ProxEntityId)
+			Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntityIds(.result, DomainId, entList, 0, , objFilter, 2)
+			;path -> sourceId
+			Kill resultSrc
+			Set iPath="" For  {
+				Set iPath=$Order(result(iPath)) If iPath="" Quit
+				Set SourceId=##class(%iKnow.Queries.PathAPI).GetSourceId(DomainId, $List(result(iPath),1))
+				Set resultSrc(SourceId)=$ListBuild(SourceId)
+			}
+			Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.resultSrc)
+		}
+	} catch {
+		Do ##class(iKnow.SetAnalysis).Log("Error SetProximityMembers : "_$ZE)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>

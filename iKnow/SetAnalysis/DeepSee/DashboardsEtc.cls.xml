@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.DeepSee.DashboardsEtc">
+<Super>%DeepSee.UserLibrary.Container</Super>
+<TimeCreated>63105,55696.631878</TimeCreated>
+
+<XData name="Contents">
+<Description>
+ This XData section contains the contents of this container.
+ Typically this is an xml document representing a Dashboard or Pivot.</Description>
+<XMLNamespace>http://www.intersystems.com/deepsee/library</XMLNamespace>
+<Data><![CDATA[
+<items>
+<dashboard xmlns="http://www.intersystems.com/deepsee/library" name="SetAnalysis" folderName="" title="DeepSee Dashboard SetAnalysis" description="" keywords="" owner="" shared="true" public="true" locked="false" resource="" timeCreated="2013-06-21T07:54:18.776Z" createdBy="UnknownUser" category="" bookCover="" scheme="" worklistCount="0" snapTo="true" snapGrid="false" gridRows="2" gridCols="2" canResize="true" canModify="true" showTitleBar="true" companyName="" companyLogo="" companyStyle="">
+  <widget name="Widget2" type="pivot" subtype="barChart" subtypeClass="barChart" title="" dataSource="SetKPI.kpi" dataLink="" drillDownDataSource="" top="16" left="15" width="1140" height="614" sidebarContent="" showSidebar="false" sidebarWidth="" maximized="false" homeRowL="0" homeColL="0" colSpanL="4" rowSpanL="4" showToolbar="true" theme="" dataColorList="">
+    <control name="" action="applyFilter" target="" targetProperty="GroupName" location="widget" type="auto" controlClass="" label="Group" title="" value="" text="" readOnly="false" valueList="" displayList="" activeWhen=""></control>
+    <control name="" action="applyFilter" target="" targetProperty="Set" location="widget" type="auto" controlClass="" label="Set" title="" value="" text="" readOnly="false" valueList="" displayList="" activeWhen=""></control>
+    <control name="" action="applyFilter" target="" targetProperty="Project" location="widget" type="hidden" controlClass="" label="Project" title="" value="" text="" readOnly="false" valueList="" displayList="" activeWhen=""></control>
+    <property name="chartToggle">chart</property>
+    <property name="excel">1</property>
+    <property name="legendPos">none</property>
+    <property name="print">1</property>
+    <override name="barChart">{legendVisible:'false',xAxis:{_type:'axis'},yAxisList:[{_type:'axis'}],chartPivot:true,_type:'barChart'}</override>
+    <override name="legend">{hidden:true,legendLabels:'Members',legendPosition:'right',_type:'chartLegend'}</override>
+  </widget>
+</dashboard>
+</items>
+]]></Data>
+</XData>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+<dashboard xmlns="http://www.intersystems.com/deepsee/library" name="PatientsAge" folderName="" title="Patients Age distribution" description="" keywords="" owner="" shared="true" public="true" locked="false" resource="" timeCreated="2014-12-02T02:02:44.737Z" createdBy="UnknownUser" category="" bookCover="" scheme="" worklistCount="2" snapTo="true" snapGrid="true" gridRows="10" gridCols="10" canResize="true" canModify="true" showTitleBar="true" companyName="" companyLogo="" companyStyle="">
+  <widget name="Widget1" type="pivot" subtype="columnChart" subtypeClass="barChart" title="" dataSource="PatientsAge.pivot" dataLink="" drillDownDataSource="" width="200" height="200" sidebarContent="" showSidebar="false" sidebarWidth="" maximized="false" homeRowL="0" homeColL="0" colSpanL="8" rowSpanL="9" showToolbar="true" theme="" dataColorList="">
+    <control name="" action="applyFilter" target="*" targetProperty="[Sets].[H1].[AllProjects]" location="widget" type="hidden" controlClass="" label="SET" title="" value="" text="" readOnly="false" valueList="" displayList="" activeWhen=""></control>
+    <override name="barChart">{backgroundStyle:'fill:rgb(208,208,207);stroke:none;',legendVisible:'false',plotAreaStyle:'fill:rgb(208,208,207);stroke:none;',xAxis:{majorGridLines:false,_type:'axis'},yAxisList:[{_type:'axis'}],_type:'barChart'}</override>
+    <override name="legend">{legendPosition:'right',legendStyle:'color:rgb(41, 41, 42);background-color:rgb(208, 208, 207);',legendTitle:'Age',_type:'chartLegend'}></override>
+    <override name="lineChart">{backgroundStyle:'fill:rgb(208,208,207);stroke:none;',legendVisible:'false',plotAreaStyle:'fill:rgb(208,208,207);stroke:none;',xAxis:{_type:'axis'},yAxisList:[{_type:'axis'}],chartFilled:true,chartStacked:true,_type:'lineChart'}</override>
+  </widget>
+</dashboard>
+<pivot xmlns="http://www.intersystems.com/deepsee/library" name="PatientsAge" folderName="" title="" description="" keywords="" owner="" shared="true" public="false" locked="false" resource="" timeCreated="2014-12-02T02:02:14.478Z" createdBy="UnknownUser" category="" bookCover="" mdx="" cellWidth="120" columnHeaderStyle="" rowHeaderStyle="" cellStyle="" rowLabelSpan="true" columnLabelSpan="true" cellHeight="22" showEmptyRows="false" showEmptyColumns="false" cubeName="cubePatients" caption="" listing="" listingRows="" showStatus="true" pageSize="100" colorScale="" rowTotals="false" columnTotals="false" rowTotalAgg="sum" columnTotalAgg="sum" rowTotalSource="page" showZebra="false" showRowCaption="true" printTitle="" printSubtitle="" printSubtitleOn="" showUser="" printPageSize="" printOrientation="1" printMarginTop="" printMarginLeft="" printMarginRight="" printMarginBottom="" printLabelWidth="" printCellWidth="" autoExecute="true" manualMode="false" userMDX="" chartMarginTop="" chartMarginLeft="" chartMarginRight="" chartMarginBottom="" maxRows="" borderLeftCell="" borderRightCell="" borderTopCell="" borderBottomCell="" borderLeftCol="" borderRightCol="" borderTopCol="" borderBottomCol="" borderLeftRow="" borderRightRow="" borderTopRow="" borderBottomRow="" showFilters="" showListingFilters="" showDate="" listingFontSize="" showZebraStripes="" filterTableStyle="" filterTableCaptionStyle="" filterTableItemStyle="" nowDisplayFormat="" measureLocation="columns" backgroundImage="" backgroundOpacity=".12">
+  <rowAxisOptions spec="" key="" value="" text="" headEnabled="false" headCount="" filterEnabled="false" filterExpression="" orderEnabled="false" orderExpression="" orderDirection="BDESC" aggEnabled="false" aggFunction="" aggFunctionParm="" levelCaption="" levelFormat="" levelSummary="" levelType="" drillLevel="0" advanced="false" levelStyle="" levelHeaderStyle="" suppress8020="false" drilldownSpec="" enabled="true">
+  </rowAxisOptions>
+  <columnAxisOptions spec="" key="" value="" text="" headEnabled="false" headCount="" filterEnabled="false" filterExpression="" orderEnabled="false" orderExpression="" orderDirection="BDESC" aggEnabled="false" aggFunction="" aggFunctionParm="" levelCaption="" levelFormat="" levelSummary="" levelType="" drillLevel="0" advanced="false" levelStyle="" levelHeaderStyle="" suppress8020="false" drilldownSpec="" enabled="true">
+  </columnAxisOptions>
+  <columnLevel spec="[Age].[H1].[Age].Members" key="" value="" text="Age" headEnabled="false" headCount="" filterEnabled="false" filterExpression="" orderEnabled="false" orderExpression="" orderDirection="BDESC" aggEnabled="false" aggFunction="" aggFunctionParm="" levelCaption="" levelFormat="" levelSummary="" levelType="" drillLevel="0" advanced="false" levelStyle="" levelHeaderStyle="" suppress8020="false" drilldownSpec="" enabled="true">
+  </columnLevel>
+</pivot>
+*/
+]]></Content>
+</UDLText>
+</Class>
+</Export>

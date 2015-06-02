@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Batches">
+<Super>%Persistent</Super>
+<TimeCreated>62907,37347.719014</TimeCreated>
+
+<Property name="ProjectId">
+<Type>iKnow.SetAnalysis.Projects</Type>
+</Property>
+
+<Property name="StartDate">
+<Type>%Date</Type>
+</Property>
+
+<Property name="StartTime">
+<Type>%Time</Type>
+</Property>
+
+<Property name="EndDate">
+<Type>%Date</Type>
+</Property>
+
+<Property name="EndTime">
+<Type>%Time</Type>
+</Property>
+
+<Property name="Error">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Property name="Started">
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<SqlComputeCode>Set {*} = $ZD({StartDate},4) _ " "_ $ZT({StartTime})</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+</Property>
+
+<Property name="Ended">
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<SqlComputeCode>Set {*} = $Select({EndDate}="":"", 1:$ZD({EndDate},4) _ " "_ $ZT({EndTime}))</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+</Property>
+
+<Method name="CreateBatch">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId:%Integer,&BatchId:%Integer,&BatchName:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	;get new batch name
+	Set objBatch=##class(iKnow.SetAnalysis.Batches).%New()
+	Set objBatch.StartDate = +$H
+	Set objBatch.StartTime = $P($H,",",2)
+	Do objBatch.ProjectIdSetObjectId(ProjectId)
+	Set Sc=objBatch.%Save()
+	Set BatchId=objBatch.%Id()
+	Set BatchName="Batch"_objBatch.%Id()
+	;Set ^iKnow.SetAnalysisBatch(ProjectId, BatchName, "START") = $H
+]]></Implementation>
+</Method>
+
+<Method name="SetError">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,BatchId:%Integer,ErrorMsg:%String</FormalSpec>
+<Implementation><![CDATA[
+	&sql(Update iKnow_SetAnalysis.Batches (Error) Values (:ErrorMsg) Where ID = :BatchId)
+	;Set ^iKnow.SetAnalysisBatch(ProjectId, BatchName, "ERROR") = "No Job"
+]]></Implementation>
+</Method>
+
+<Method name="SetEnd">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,BatchId:%Integer</FormalSpec>
+<Implementation><![CDATA[
+	Set EndDate=+$H
+	Set EndTime=$P($H,",",2)
+	&sql(Update iKnow_SetAnalysis.Batches (EndDate, EndTime) Values (:EndDate,:EndTime) Where ID = :BatchId)
+	;Set ^iKnow.SetAnalysisBatch(ProjectId, BatchName, "STOP") = $H
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.BatchesD</DataLocation>
+<DefaultData>BatchesDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.BatchesD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.BatchesI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.BatchesS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="BatchesDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>ProjectId</Value>
+</Value>
+<Value name="3">
+<Value>Name</Value>
+</Value>
+<Value name="4">
+<Value>StartDate</Value>
+</Value>
+<Value name="5">
+<Value>StartTime</Value>
+</Value>
+<Value name="6">
+<Value>EndDate</Value>
+</Value>
+<Value name="7">
+<Value>EndTime</Value>
+</Value>
+<Value name="8">
+<Value>Error</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

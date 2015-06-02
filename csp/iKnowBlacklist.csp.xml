@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowBlacklist.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<csp:comment>
+  This page lets you add or remove entries from an exiting Blacklist.
+  http://localhost:57772/csp/namespace/Blacklist.csp?domain=ABC&blacklist=XYZ
+  ?domain=ABC -> give an existing domain, default is error page
+  ?blacklist=XYZ  -> blacklist will be created of it does not exist, default is NonRelevant
+  ?max=100 -> Top list will give first 100 entries, default = 500
+  .
+</csp:comment>
+
+<head>
+
+<title>	Blacklist </title>
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+
+  <script language="cache" runat="server">
+  	If $Data(%request.Data("domain",1)) {
+	  	Set Domain=%request.Data("domain",1)
+	  	Set %session.Data("iknow.blacklist.domain")=Domain
+  	} elseIf $Data(%session.Data("iknow.blacklist.domain")) {
+	  	Set Domain=%session.Data("iknow.blacklist.domain")
+  	} else {
+  		Set Domain=""
+  	}
+  	If $Data(%request.Data("blacklist",1)) {
+	  	Set Blacklist=%request.Data("blacklist",1)
+	  	Set %session.Data("iknow.blacklist.blacklist")=Blacklist
+  	} elseIf $Data(%session.Data("iknow.blacklist.blacklist")) {
+	  	Set Blacklist=%session.Data("iknow.blacklist.blacklist")
+  	} else {
+  		Set Blacklist=""  ;NonRelevant"
+  	}
+	If $Data(%request.Data("max",1)) {
+		Set Max = %request.Data("max",1)
+		Set %session.Data("iknow.blacklist.max")=Max
+	} elseif $Data(%session.Data("iknow.blacklist.max")) {
+		Set Max=%session.Data("iknow.blacklist.max")
+	} else {
+		Set Max = 500
+	}
+	Set Action=$Get(%request.Data("action",1))
+	If Action="" Set Action=$Select(Blacklist="":"SelectBlacklist",1:"EditBlacklist")
+  	;;todo : if there is no blacklist : 
+  	;;  show a list of available blacklists in the domain to select from
+  	;;  ability to create a new blacklist
+  	
+  	Set objDomain=$Select(Domain="":"",1:##class(%iKnow.Domain).Open(Domain))
+	Set Error=""
+	If 1 {
+	  	Set DomainId=$Select(objDomain="":0,1:objDomain.Id)
+        If (Action="CreateBlacklist") {
+		
+        } elseIf (Action="SaveBlacklist") {
+	        Set NewBlacklistName=$Get(%request.Data("NewBlacklistName",1))
+	        Set NewBlacklistDescription=$Get(%request.Data("NewBlacklistDescription",1))
+	        If NewBlacklistName="" {
+	      	  Set ErrorBlacklist="Empty blacklist name"
+	      	  Set Action="CreateBlacklist"
+	        } else {
+		  	  Set BlacklistId = ##class(%iKnow.Utils.MaintenanceAPI).GetBlackListId(DomainId,NewBlacklistName)
+			  If +BlacklistId > 0 {
+	      	    Set ErrorBlacklist="Blacklist name already exists"
+	      	    Set Action="CreateBlacklist"
+			  } else {
+			  	  Set BlacklistId = ##class(%iKnow.Utils.MaintenanceAPI).CreateBlackList(DomainId, NewBlacklistName, NewBlacklistDescription)
+			 	  Set Blacklist=NewBlacklistName  ;we can continue and edit this blacklist
+	  			  Set %session.Data("iknow.blacklist.blacklist")=Blacklist
+				  Set Action="EditBlacklist"
+			  }
+	        }
+	      }
+        If Action="SelectBlacklist" {
+        	;get blacklists
+			Do ##class(%iKnow.Utils.MaintenanceAPI).GetBlackLists(.blacklists,DomainId,1)
+			Set blacklists=$Order(blacklists(""),-1)
+        } elseif (Action="EditBlacklist")!(Action="add")!(Action="remove")!(Action="topplus")!(Action="topmin") {
+			Set GotoMenu=1
+		  	Set BlacklistId = ##class(%iKnow.Utils.MaintenanceAPI).GetBlackListId(DomainId,Blacklist)
+			If +BlacklistId '> 0 {
+				Set BlacklistId = ##class(%iKnow.Utils.MaintenanceAPI).CreateBlackList(DomainId, Blacklist, "Created from blacklist.csp")
+				Write "Blacklist created","<br>"
+			}
+			If +BlacklistId '> 0 Set Blacklist="No blacklist found" write Blacklist,"<br>"
+			Set Action=$Get(%request.Data("action",1))
+			If Action="add" {
+				Do ##class(%iKnow.Utils.MaintenanceAPI).AddStringToBlackList(DomainId, BlacklistId, %request.Data("item",1))
+			} elseif Action="remove" {
+				Do ##class(%iKnow.Utils.MaintenanceAPI).RemoveStringFromBlackList(DomainId, BlacklistId, %request.Data("item",1))
+			} elseif Action="topplus" {
+			  Set Max=Max+100,%session.Data("iknow.blacklist.max")=Max
+			} elseif Action="topmin" {
+			  If Max>100 Set Max=Max-100
+			  Set %session.Data("iknow.blacklist.max")=Max
+			}
+
+			
+			Do ##class(%iKnow.Queries.EntityAPI).GetTop(.ResultT, DomainId, 1, Max,,,,,,$ListBuild(BlacklistId))
+
+			Do ##class(%iKnow.Utils.MaintenanceAPI).GetBlackListElements(.ResultB, DomainId, BlacklistId)
+        }
+	} else {
+		Set Error = "No valid domain"
+		Set Action="Error"
+	}
+  </script>
+  
+</head>
+
+<body>
+  <csp:If Condition='$Data(GotoMenu)'>
+    <a href="iKnowBlacklist.csp?blacklist=">back</a>
+  </csp:if>
+  <csp:If Condition='Action="Error"'>
+    <H2>#(Error)#</H2>
+  <csp:elseif Condition='Action="SelectBlacklist"'>
+    <div id="header1">Please choose a blacklist in following list:</div>
+      <table id="menuProject2">
+        <tbody>
+          <csp:loop counter="iBlacklist" FROM="1" TO ="#(+blacklists)#">
+            <tr onclick="window.location.href = 'iKnowBlacklist.csp?blacklist=#($list(blacklists(iBlacklist),2))#';">
+              <td><b>#($list(blacklists(iBlacklist),2))#</b></td>
+              <td>#($list(blacklists(iBlacklist),3))#</td>
+            </tr>
+          </csp:loop>
+          <tr onclick="window.location.href = 'iKnowBlacklist.csp?action=CreateBlacklist';">
+            <td><b>New blacklist</b></td>
+            <td>Create a new blacklist</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  <csp:elseif condition='Action="CreateBlacklist"'>
+    <div id="header1">Create a new Blacklist :</div>
+      <form name="frmB" action="iKnowBlacklist.csp" method="post" class="main">
+        <table>
+          <tr><td colspan="2" class="error">#($Get(ErrorBlacklist))#</td></tr>
+          <tr>
+            <td>Blacklist Name : </td>
+            <td><input type="text" name="NewBlacklistName" size="20" value="#($Get(NewBlacklistName))#"/></td>
+          </tr>
+          <tr valign="top">
+            <td>Description : </td>
+            <td><input type="text" name="NewBlacklistDescription" size="50" value="#($Get(NewBlacklistDescription))#" /></td>
+          </tr>
+          <tr>
+            <td></td><td><button type="submit" name="action" Value="SaveBlacklist">SaveBlacklist</button>
+          </tr>
+        </table>
+      </form>
+    </div>
+  <csp:else>
+	  <table>
+	    <tr>
+	      <td valign="top">
+	        <H1><a href="iKnowBlacklist.csp?action=topmin" style="text-decoration:none">-</a>Top #(Max)#<a href="iKnowBlacklist.csp?action=topplus" style="text-decoration:none">+</a></H1>
+	  		<script language="cache" runat="server">
+				Set i="" For {
+				Set i=$Order(ResultT(i)) If i="" Quit
+				Write "<a href='iKnowBlacklist.csp?action=add&item=",$List(ResultT(i),2),"'>",$List(ResultT(i),2), " [", $List(ResultT(i),3), "]" ,"</a><br>"
+			}
+	  	   </script>
+	      </td>
+	      <td valign="top">
+	        <H1>Blacklist #(Blacklist)#</H1>
+	  		<script language="cache" runat="server">
+				Set i="" For {
+				Set i=$Order(ResultB(i)) If i="" Quit
+				Write "<a href='iKnowBlacklist.csp?action=remove&item=",$List(ResultB(i),2),"'>",$List(ResultB(i),2),"</a><br>"
+			}
+	  	   </script>
+	      </td>
+	    </tr>
+	  </table>
+   </csp:if>
+</body>
+</html>
+]]></CSP>
+</Export>

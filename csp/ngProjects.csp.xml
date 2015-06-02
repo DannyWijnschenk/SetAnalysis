@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngProjects.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<!DOCTYPE html>
+<!--- //call this page with : http://127.0.0.1:57772/csp/setanalysis/ngProjects.csp
+to prevent cros or chrome.exe --disable-web-security -->
+<html ng-app="ProjectsApp">
+  <head>
+ <link rel="stylesheet" type="text/css" href="nglib/bootstrap/css/bootstrapSpacelab.min.css" />
+<!--
+ <link rel="stylesheet" type="text/css" href="nglib/bootstrap/css/bootstrap.css" />
+--->
+ <link rel="stylesheet" type="text/css" href="nglib/additional.css" />
+ </head>
+  <body>
+    <div ng-controller="ProjectsController">
+      <div class="well">
+        <label>
+          <input type="text" ng-model="criteria"></input>&nbsp;<span class="glyphicon glyphicon-search"></span>
+        </label>
+      </div>
+      <table class="table table-hover">
+        <thead>
+          <th ng-click="sort('name')">Name
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('Name'), 'glyphicon glyphicon-chevron-down': isSortDown('Name')}"></i>
+          </th>
+          <th ng-click="sort('description')">Description
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('Description'), 'glyphicon glyphicon-chevron-down': isSortDown('Description')}"></i>
+          </th>
+          <th ng-click="sort('created')">Created
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('created'), 'glyphicon glyphicon-chevron-down': isSortDown('created')}"></i>
+          </th>
+          <th ng-click="sort('modified')">Modified
+            <i ng-class="{'glyphicon glyphicon-chevron-up': isSortUp('modified'), 'glyphicon glyphicon-chevron-down': isSortDown('modified')}"></i>
+          </th>
+    
+      <th></th>
+        </thead>
+        <tr ng-repeat="project in filteredProjects = (projectsData | filter:criteria | orderBy:sortField:reverse)" >  <!--ng-click="selectProject(project)"-->
+          <td>{{project.Name}}</td>
+          <td>{{project.Description}}</td>
+          <td>{{project.created | date:'dd-MMM-yy'}}</td>
+          <td>{{project.modified | date:'dd-MMM-yy'}}</td>
+          <td>
+            <a class="icon-link" ng-href="ngSetAnalysis.csp#EditProject/{{project.id}}"> <span class="glyphicon glyphicon-pencil"></span> </a>
+            <a class="icon-link" href=""> <span class="glyphicon glyphicon-trash"></span> </a>
+            <a class="icon-link" href="iKnowSetAnalysis.csp?project={{project.Name}}"> <span class="glyphicon glyphicon-user"></span></a>
+            <a class="icon-link" ng-href="ngSetAnalysis.csp#Sets/{{project.id}}"> <span class="glyphicon glyphicon-zoom-in"></span> </a>
+          </td>
+        </tr>
+	   </table>
+	 </div>
+<!-- not needed when this ap is called by main app
+    <script type="text/javascript" src="https://code.jquery.com/jquery.js"></script>
+    <script type="text/javascript" src="nglib/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="nglib/angular.min.js"></script>
+    <script type="text/javascript" src="nglib/angular-resource.min.js"></script>
+    <script type="text/javascript" src="nglib/angular-route.min.js"></script>
+<!--	<script type="text/javascript" src="ngProjects.js"></script>
+-->
+  </body>
+</html>
+]]></CSP>
+</Export>

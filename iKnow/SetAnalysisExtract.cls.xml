@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisExtract">
+<TimeCreated>63231,64651.197443</TimeCreated>
+
+<Method name="Create">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>RuleSet:%String="DIAFRAGMA",Wildcard:%Boolean=1</FormalSpec>
+<Implementation><![CDATA[
+	Kill ^iKnow.SetAnalysisExtractRule
+	If Wildcard {
+		Set ^iKnow.SetAnalysisExtractRule(RuleSet,1)="diafragma|*|#N##EENHEID#"
+	} else {
+		Set ^iKnow.SetAnalysisExtractRule(RuleSet,1)="diafragma|op|#N##EENHEID#"
+		Set ^iKnow.SetAnalysisExtractRule(RuleSet,2)="diafragma|ligt op|#N##EENHEID#"
+		Set ^iKnow.SetAnalysisExtractRule(RuleSet,3)="diafragma|bevindt zich op|#N##EENHEID#"
+		Set ^iKnow.SetAnalysisExtractRule(RuleSet,4)="diafragma|wordt gezien op|#N##EENHEID#"
+	}
+]]></Implementation>
+</Method>
+
+<Method name="Extract">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,BasedOnSet:%String,NewExtractSet:%String,Rules:%String</FormalSpec>
+<Implementation><![CDATA[
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :FieldName, :FieldMethod from iKnow_Setanalysis.Projects Where Id = :ProjectId)
+	Set PluginId = $List(^iKnow.SetAnalysis(ProjectId, BasedOnSet, "D", 1), 2)
+	If PluginId = "" {
+		Set TermType = "ENTITY"  ;TODO : better : look at dependent sets
+	} else {
+		&sql(Select TermType Into :TermType From iKnow.SetAnalysisPlugin Where Id = :PluginId)
+		If SQLCODE'=0 Set TermType="ENTITY"
+	}
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set FieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, FieldName, .sc)
+	Kill BuildSets
+	Set iRule=""
+	Do ##class(iKnow.SetAnalysis.XRules).GetRules(ProjectId, Rules, .ListRules)
+	Do ##class(iKnow.SetAnalysis.Patterns).GetPatterns(.Patterns)
+	For {
+		Set iRule=$Order(ListRules(iRule)) If iRule="" Quit
+		Set OrigRule=ListRules(iRule)
+		Set Rule=OrigRule
+		Do ##class(iKnow.SetAnalysis.Patterns).ReplacePatterns(.Patterns, .Rule, .ReplacedPattern, .ReplacedBy)
+		;Math Rule with all concepts in Set
+		;write !,"OrigRule:",OrigRule,", Rule:",Rule,", ReplacedPattern:",ReplacedPattern,", replacedby : ",ReplacedBy
+		Set Entity=""
+		For {
+			Set Entity=$Order(^iKnow.SetAnalysis(ProjectId, BasedOnSet, "E", Entity)) If Entity="" Quit
+			Set EntityId=^(Entity)
+			;todo : if path, get the parts, and do the $Locate on part level, stop at the part wich is numeric
+			If TermType="PATH" {
+				Set startLocate=$Locate(Entity, Rule, ,endLocate, strLocate)
+				set ^dw($i(^dw))=$lb(Entity,startLocate,OrigRule,Rule)
+				If startLocate>0 {
+					Set foundEntity=$E(Entity,startLocate,endLocate-1)
+					Set iFirst=$Find(OrigRule,ReplacedPattern)
+					Set Rest=$E(foundEntity,iFirst-$L(ReplacedPattern),*)
+					Set NewSet = NewExtractSet_"."_$TR(Rest,". ",",")
+					Set BuildSets("E",EntityId) = $ListBuild(Rest, NewSet)
+					Set BuildSets("S",NewSet)=Rest
+				}
+			} else {
+				Set startLocate=$Locate($TR(Entity,"|",""), Rule, ,endLocate, strLocate)
+				If startLocate>0 {
+					Set startLocate=$Locate($TR(Entity,"|",""), ReplacedBy, ,endLocate, strLocate)
+					;locate where #Pattern# is
+					;remove chars before #Pattern#
+					Set firstPart=$Extract($TR(Entity,"|",""),1,startLocate-1)
+					Set nextPart=$Extract($TR(Entity,"|",""),endLocate,*)
+					;write !,"[",firstPart,"] [",strLocate,"] [",nextPart,"]"
+					Set Rest = ##class(iKnow.SetAnalysis.Patterns).CalculateValue(ReplacedPattern, firstPart,strLocate,nextPart)
+					;add all patients belonging to this concept to the set "Set".Rest				
+					Set NewSet = NewExtractSet_"."_$TR(Rest,". ",",")
+					Set BuildSets("E",EntityId) = $ListBuild(Rest, NewSet)
+					Set BuildSets("S",NewSet)=Rest
+				}
+			}
+		}
+	}
+	;kill ^dw m ^dw=BuildSets
+	Set NewSet=""
+	For {
+		Set NewSet=$Order(BuildSets("S",NewSet)) If NewSet="" Quit
+		Do ##class(iKnow.SetAnalysis).RemoveSet(ProjectId, NewSet)
+	}
+	Set EntityId=""
+	For  {
+		Set EntityId=$Order(BuildSets("E",EntityId)) If EntityId="" Quit
+		Set Value = $List(BuildSets("E",EntityId), 1)
+		Set NewSet = $List(BuildSets("E",EntityId), 2)
+		Do ..AddMembersToSet(ProjectId, BasedOnSet, EntityId, NewSet, Value, DomainId, FieldId, FieldName, FieldMethod, TermType)
+	}
+	Set ^iKnow.SetAnalysis(ProjectId,NewExtractSet,"D",1)=$lb(3,,"Extract "_BasedOnSet_" "_Rules)
+	Set Member=""
+	Set NewSet=""
+	For {
+		Set NewSet=$Order(BuildSets("S",NewSet)) If NewSet="" Quit
+		Set Member=""
+		For {
+			Set Member=$Order(^iKnow.SetAnalysis(ProjectId, NewSet, "P", Member)) If Member="" Quit
+			Merge ^iKnow.SetAnalysis(ProjectId, NewExtractSet, "P", Member) = ^iKnow.SetAnalysis(ProjectId, NewSet, "P", Member)
+		}
+	}
+	&sql(Delete From iKnow_SetAnalysis.XKeyValues Where (ProjectId = :ProjectId) And (XKey = :Rules))
+	Set NewSet=""
+	For {
+		Set NewSet=$Order(BuildSets("S",NewSet)) If NewSet="" Quit
+		Set Value=BuildSets("S",NewSet)
+		Set iMember=""
+		For {
+			Set iMember=$Order(^iKnow.SetAnalysis(ProjectId, NewSet, "P", iMember)) If iMember="" Quit
+			Set SrcId=""
+			For  {
+				Set SrcId=$Order(^iKnow.SetAnalysis(ProjectId, NewSet, "P", iMember, SrcId)) If SrcId="" Quit
+				Set SentId=""
+				For  {
+					Set SentId=$Order(^iKnow.SetAnalysis(ProjectId, NewSet, "P", iMember, SrcId, SentId)) If SentId="" Quit
+					Set Sentence=##class(iKnow.SetAnalysis).GetSentence(DomainId, SentId, .Terms)
+					&sql(Insert Into iKnow_SetAnalysis.XKeyValues (ProjectId, Member, XKey, XValue, Sentence, SourceId) Values (:ProjectId, :iMember, :Rules, :Value, :Sentence, :SrcId))
+				}
+			}
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="AddMembersToSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,EntityId,SaveSet,Value,DomainId,FieldId,FieldName,FieldMethod,TermType</FormalSpec>
+<Implementation><![CDATA[
+	;w "." zw ^iKnow.SetAnalysis(ProjectId, SaveSet) w "."
+	;Kill ^iKnow.SetAnalysis(ProjectId, SaveSet)
+	Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "D", 1) = $lb(3,, "Extract "_Set_" "_Value,,1,1)
+	If TermType = "ENTITY" {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.result, DomainId, $lb(EntityId), 0)  ;TODO : with objFilter)
+	} elseif TermType="CRC" {
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByCrcIds(.result, DomainId, $lb(EntityId), 0)  ;,,objFilter)
+	} elseif TermType="PATH" {
+		Set pathList=$lb(id)
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByPathIds(.result, DomainId, $lb(EntityId), 0)  ;,,objFilter)
+	}
+	Do ##class(iKnow.SetAnalysisPlugin).StoreMetaValues(TermType,ProjectId,SaveSet,FieldId,FieldName,FieldMethod,$lb(EntityId),.result)
+	;zw ^iKnow.SetAnalysis(ProjectId, SaveSet)
+]]></Implementation>
+</Method>
+</Class>
+</Export>

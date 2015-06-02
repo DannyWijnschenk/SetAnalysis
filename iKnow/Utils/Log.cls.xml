@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.Utils.Log">
+<Description>
+Version 1.0.3 DW-20.11.2014</Description>
+<TimeCreated>63504,63163.03871</TimeCreated>
+
+<Method name="Log">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Message:%String,Terminal:%Boolean=0</FormalSpec>
+<Implementation><![CDATA[
+	#Dim Now as %String = $ZDate($H,8)
+	Set Message=$ZT($P($H,",",2))_" "_$Get(Message)
+	Set ^LogLoad(Now,$i(^LogLoad(Now)))=Message
+	If Terminal Use 0 Write !,Now," ",Message,!
+]]></Implementation>
+</Method>
+</Class>
+</Export>

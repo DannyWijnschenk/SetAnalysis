@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.SetMemberSources">
+<Super>%Persistent</Super>
+<TimeCreated>62897,70235.250737</TimeCreated>
+
+<Property name="SetId">
+<Type>iKnow.SetAnalysis.Sets</Type>
+</Property>
+
+<Property name="MemberId">
+<Type>iKnow.SetAnalysis.SetMembers</Type>
+</Property>
+
+<Property name="SourceId">
+<Type>%String</Type>
+</Property>
+
+<Property name="Member">
+<Type>%String</Type>
+</Property>
+
+<Index name="idxSetMember">
+<Properties>SetId,Member</Properties>
+</Index>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetA4ECA.SetMemberSoA7DCD</DataLocation>
+<DefaultData>SetMemberSourcesDefaultData</DefaultData>
+<IdLocation>^iKnow.SetA4ECA.SetMemberSoA7DCD</IdLocation>
+<IndexLocation>^iKnow.SetA4ECA.SetMemberSoA7DCI</IndexLocation>
+<StreamLocation>^iKnow.SetA4ECA.SetMemberSoA7DCS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetMemberSourcesDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>MemberId</Value>
+</Value>
+<Value name="3">
+<Value>Source</Value>
+</Value>
+<Value name="4">
+<Value>SourceId</Value>
+</Value>
+<Value name="5">
+<Value>SetId</Value>
+</Value>
+<Value name="6">
+<Value>Member</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

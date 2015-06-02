@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.XRules">
+<Super>%Persistent</Super>
+<TimeCreated>63236,51553.498501</TimeCreated>
+
+<Property name="ProjectId">
+<Type>iKnow.SetAnalysis.Projects</Type>
+</Property>
+
+<Property name="Name">
+<Type>%String</Type>
+</Property>
+
+<Property name="Rule">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Index name="idxName">
+<Properties>Name</Properties>
+</Index>
+
+<Index name="idxNameRule">
+<Properties>ProjectId,Name,Rule</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Method name="SaveRules">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,Name:%String,List:%String,Replace:%Boolean=0</FormalSpec>
+<Implementation><![CDATA[
+	If Replace {
+		&sql(Delete From iKnow_SetAnalysis.XRules Where (ProjectId = :ProjectId) And (Name = :Name))
+	}
+	Set iRule=""
+	For {
+		Set iRule=$Order(List(iRule),1,Rule) If iRule="" Quit
+		&sql(Insert Into iKnow_SetAnalysis.XRules (ProjectId, Name, Rule) Values (:ProjectId, :Name, :Rule))
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetRules">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId:%Integer,Name:%String,&Rules]]></FormalSpec>
+<Implementation><![CDATA[
+	&sql(Declare C Cursor for
+	     Select Id, Rule From iKnow_SetAnalysis.XRules Where (ProjectId = :ProjectId) And (Name = :Name))
+	&sql(Open C)
+	For {
+		&sql(Fetch C Into :Id, :Rule)
+		If SQLCODE'=0 Quit
+		If Rule'="" Set Rules(Id)=Rule
+	}
+	&sql(Close C)
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.XRulesD</DataLocation>
+<DefaultData>XRulesDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.XRulesD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.XRulesI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.XRulesS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="XRulesDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Name</Value>
+</Value>
+<Value name="3">
+<Value>Rule</Value>
+</Value>
+<Value name="4">
+<Value>ProjectId</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

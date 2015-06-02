@@ -1,0 +1,2136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis">
+<Description>
+Version : V. 2.0.11 15/12/2014</Description>
+<IncludeCode>%IKPublic,iKnowSetAnalysisIncludes</IncludeCode>
+<TimeCreated>62725,67089.805565</TimeCreated>
+
+<Method name="DomainExists">
+<Description>
+Returns 1 if the DomainId exists in the SetAnalysis</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	Set objDomain=##class(%iKnow.Domain).OpenId(DomainId)
+	Set Exists=0
+	If objDomain'="" {
+		Set DomainName=objDomain.Name
+		&sql(Select Id From iKnow_SetAnalysis.Projects Where iKnowDomain = :DomainName)
+		Set Exists=(SQLCODE=0)
+	}
+	Quit Exists
+]]></Implementation>
+</Method>
+
+<Method name="RemoveMemberFromSet">
+<Description>
+Manually remove a member from a set (called by UI when user wants a member removed from the set)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,Member</FormalSpec>
+<Implementation><![CDATA[
+	Merge ^iKnow.SetAnalysis(ProjectId,Set,"PX",Member) = ^iKnow.SetAnalysis(ProjectId,Set,"P",Member)
+	Kill ^iKnow.SetAnalysis(ProjectId,Set,"P",Member)
+]]></Implementation>
+</Method>
+
+<Method name="RestoreMemberToSet">
+<Description>
+Restore the member back to the set, (after being removed earlier from the set)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,Member</FormalSpec>
+<Implementation><![CDATA[
+	Merge ^iKnow.SetAnalysis(ProjectId,Set,"P",Member) = ^iKnow.SetAnalysis(ProjectId,Set,"PX",Member)
+	Kill ^iKnow.SetAnalysis(ProjectId,Set,"PX",Member)
+]]></Implementation>
+</Method>
+
+<Method name="RemoveSentenceFromSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,sentId,srcId</FormalSpec>
+<Implementation><![CDATA[
+	;get crclist for this sentence
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Do ##class(%iKnow.Queries.SentenceAPI).GetParts(.Result,DomainId,sentId,1)
+	Set iSent="",crcList=""
+	For {
+		Set iSent=$Order(Result(iSent)) If iSent="" Quit
+		For crcType="CRCMASTER","CRCSLAVE","CRCRELATION" {
+			If $Data(Result(iSent,crcType)) {
+				 Set crcId=$List(Result(iSent,crcType),2)
+				 If crcId'="",'$ListFind(crcList,crcId) Set crcList=crcList_$ListBuild(crcId)
+			}
+		}
+	}
+	;get sourcelist for this set
+	Set srcList=""
+	Set srcId=""
+	For {
+		Set srcId=$Order(^iKnow.SetAnalysis(ProjectId, Set, "SRC", srcId)) If srcId="" Quit
+		set srcList=srcList_$ListBuild(srcId)
+	}
+	;get sentences for crclist & sourcelist
+	Kill Result
+	Do ##class(%iKnow.Queries.SentenceAPI).GetByCrcIds(.Result, DomainId, crcList, srcList, 0,999999,$$$INTERSECT)
+	;delete alls sentences in resultset
+	Set iResult=""
+	For {
+		Set iResult=$Order(Result(iResult),1,data) If iResult="" Quit
+		Set srcId=$List(data,1)
+		set sentId=$List(data,3)
+		Do ..RemoveThisSentenceFromSet(ProjectId, Set, sentId, srcId)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="RemoveThisSentenceFromSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,sentId,srcId</FormalSpec>
+<Implementation><![CDATA[
+	#Dim Member as %String
+	Set Member=""
+	For {
+		Set Member = $Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member)) If Member = "" Quit
+		If $Data(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, srcId, sentId)) {
+			Merge ^iKnow.SetAnalysis(ProjectId, Set, "PX", Member, srcId, sentId)=^iKnow.SetAnalysis(ProjectId, Set, "P", Member, srcId, sentId)
+			Kill ^iKnow.SetAnalysis(ProjectId, Set, "P", Member, srcId, sentId)
+			If $Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, srcId, "")) = "" {
+				Merge ^iKnow.SetAnalysis(ProjectId, Set, "PX", Member, srcId)=^iKnow.SetAnalysis(ProjectId, Set, "P", Member, srcId)
+				Kill ^iKnow.SetAnalysis(ProjectId, Set, "P", Member, srcId)
+				If $Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, "")) = "" {
+					Do ..RemoveMemberFromSet(ProjectId, Set, Member)
+				}
+			}
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="IsInSet">
+<Description>
+Returns 1 if the Member is in the set for a project</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,MemberId,Set</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[	Quit $Data(^iKnow.SetAnalysis(ProjectId,Set,"P",MemberId))
+]]></Implementation>
+</Method>
+
+<Method name="FrequencyInSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,MemberId,Set</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+	Set Frequency=0
+	Set src="" For {
+		Set src=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",MemberId, src)) If src="" Quit
+		Set sentence="" For {
+			Set sentence=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",MemberId, src, sentence)) If sentence="" Quit
+			Set Frequency=Frequency+1
+		}
+	}
+	Quit Frequency
+]]></Implementation>
+</Method>
+
+<Method name="GetSourceSentencesInSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,MemberId,Set</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set ReturnStr=""
+	Set iElement=0
+	Set src="" For {
+		Set src=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",MemberId, src)) If src="" Quit
+		Set sentence="" For {
+			Set sentence=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",MemberId, src, sentence)) If sentence="" Quit
+			Set iElement=iElement+1
+			Set $list(ReturnStr,iElement)=$ListBuild(src,sentence)
+		}
+	}
+	Quit ReturnStr
+]]></Implementation>
+</Method>
+
+<Method name="GetSets">
+<Description>
+Given a DomainId, returns an array with Sets</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,&Sets,Public:%Boolean=0]]></FormalSpec>
+<Implementation><![CDATA[
+	Set Set=""
+	For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId,Set)) If Set="" Quit
+		Set Sets($ZCVT(Set,"U"))=$lb(Set,ProjectId,Set)
+	}
+	If Public {
+		&sql(Declare PUB Cursor for
+		     Select ID, Name From iKnow_SetAnalysis.Projects Where IsPublic = 1 Order By Name)
+		&sql(Open PUB)
+		For {
+			&sql(Fetch PUB Into :pubProjectId, :pubProjectName)
+			If SQLCODE'=0 Quit
+			If pubProjectId=ProjectId Continue
+			Set Set=""
+			For {
+				Set Set=$Order(^iKnow.SetAnalysis(pubProjectId,Set)) If Set="" Quit
+				Set Sets($ZCVT("_"_pubProjectName_"."_Set,"U"))=$Lb(pubProjectName_"."_Set,pubProjectId,Set)
+			}
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="DeleteProject">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set Set=""
+	For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		Do ..RemoveSet(ProjectId, Set)
+	}
+	Kill ^iKnow.SetAnalysis(ProjectId)
+	&sql(Delete From iKnow_SetAnalysis.Projects Where Id = :ProjectId)
+	Quit 1
+]]></Implementation>
+</Method>
+
+<Method name="RemoveSet">
+<Description>
+Remove a set from disk</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set:%String</FormalSpec>
+<Implementation><![CDATA[
+  	If Set'="" {
+	  	Kill ^iKnow.SetAnalysis(ProjectId,Set)
+		Do ##class(iKnow.SetAnalysis.Sets).RemoveSet(ProjectId, Set)
+  	}
+	;TODO:should also remove set's that depend on this set ?
+]]></Implementation>
+</Method>
+
+<Method name="CreateSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,SetName:%String,Definition:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	For iDef=1:1:$ListLength(Definition) {
+		If $List(Definition,iDef)'="" Set DefArray($List(Definition,iDef))=""
+	}
+	Quit ..SaveSet(ProjectId, , SetName, .DefArray, , 0)
+]]></Implementation>
+</Method>
+
+<Method name="RenameSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,OldName,NewName</FormalSpec>
+<Implementation><![CDATA[
+	If NewName="" Quit
+	If NewName=OldName Quit
+	If $Data(^iKnow.SetAnalysis(ProjectId, NewName)) Quit
+	Merge ^iKnow.SetAnalysis(ProjectId, NewName) = ^iKnow.SetAnalysis(ProjectId, OldName)
+	Kill ^iKnow.SetAnalysis(ProjectId, OldName)
+	//loop thru all sets, look for dependant on OldName -> change in NewName and change formula
+	Set Set="" For  {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) Quit:Set=""
+		If $Data(^iKnow.SetAnalysis(ProjectId, Set, "DEP", OldName)) {
+			Set ^iKnow.SetAnalysis(ProjectId, Set, "DEP", NewName)=^iKnow.SetAnalysis(ProjectId, Set, "DEP", OldName)
+			Kill ^iKnow.SetAnalysis(ProjectId, Set, "DEP", OldName)
+			//change name in formula
+			Set FormulaData=^iKnow.SetAnalysis(ProjectId, Set, "D", 1)
+			Set Formula=$List(FormulaData,3)
+			Set Try=0
+			For {
+				;If (" "_Formula_" ")'[(" "_OldName_" ") Quit
+				Set iNext=$Find(Formula,OldName, Try)
+				If iNext=0 Quit
+				If (iNext-$L(OldName)-1)>0,$Extract(Formula,iNext-$L(OldName)-1)'=" " Set Try=Try+1 Continue
+				If iNext'>$Length(Formula),$Extract(Formula,iNext)'=" " Set Try=Try+1 Continue
+				Set Formula=$Extract(Formula,1,iNext-$L(OldName)-1) _ NewName _ $Extract(Formula, iNext, *)
+			}
+			Set $List(^iKnow.SetAnalysis(ProjectId, Set, "D", 1),3)=Formula
+		}
+		If $ListGet(^iKnow.SetAnalysis(ProjectId, Set, "D", 1),4) = OldName {
+			Set $List(^iKnow.SetAnalysis(ProjectId, Set, "D", 1),4) = NewName
+		}
+	}
+	//change in sql tables:
+	///iKnow.SetAnalysis.Sets
+	&sql(Update iKnow_SetAnalysis.Sets Set Name=:NewName Where (ProjectId=:ProjectId) And (Name=:OldName)) 
+	///iKnow_SetAnalysis.SetKeyValueMembers
+	&sql(Update iKnow_SetAnalysis.SetKeyValueMembers Set SetName=:NewName Where  (SetName=:OldName))
+]]></Implementation>
+</Method>
+
+<Method name="SaveSet">
+<Description>
+Save a set to disk</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,metadataField,SaveSet:%String,Definition:%String,entities:%String,isMerge:%Boolean,&filters:%String,resultPtr:%String,&blacklistmembers:%String,DeepSeeEnabled:%Boolean,RestEnabled:%Boolean,SetDescription:%String=""]]></FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+
+  /*
+	^iKnow.SetAnalysis=$lb(ExportDir)
+	^iKnow.SetAnalysis(ProjectId) = $ListBuild()
+	^iKnow.SetAnalysis(ProjectId, SetName) = $lb(BatchId or 0)
+	;'D' : Definition of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "D", 1) = $lb(0, PluginId, "Input", "Set", DeepSeeEnabled, RestEnabled, Pattern, SetDescription, UpToDate)
+	                                             or $lb(1,, "SETA or SETB ...")
+	                                             or $lb(2,, "SETA,SETB,...")  (score)
+	;'F' : Filters of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "F", inc) = $lb(metafield,operator,value,displayvalue)
+	;'E' : selected entities/plugin values of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "E", entityValue) = EntityId
+	;'X' : selected and non-selected entities
+	^iKnow.SetAnalysis(ProjectId, SetName, "X", entityValue) = EntityId  (not selected)
+	;'M' : members & values
+	^iKnow.SetAnalysis(ProjectId, SetName, "M", member, EntityId) = ""
+	;'P' : members of the set (metafield ids like patients)
+	^iKnow.SetAnalysis(ProjectId, SetName, "P", member, srcId) = score
+	^iKnow.SetAnalysis(ProjectId, SetName, "P", member, srcId, sentId)=""
+	;'SRC' : sources of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "SRC", srcId)=""
+	;'PS' : only for score :
+	^iKnow.SetAnalysis(ProjectId, SetName, "PS", score, metaValue) = ""
+	;'PX' : only if blacklisted (by removing a member or removing a sentence):
+	^iKnow.SetAnalysis(ProjectId, SetName, "PX", metaValue, srcId, sentId)=""  -> blacklisted metaValue
+  */
+
+	Set $List(Definition,5)=DeepSeeEnabled
+	Set $List(Definition,6)=RestEnabled
+	Set $List(Definition,8)=SetDescription
+	Set $List(Definition,9)=1  ;when a set is saved, it is up-to-date !
+    Merge resultEnt = ^iKnow.SetAnalysisTemp(resultPtr,"S")
+	Set FilterStr=""
+	Set iFilter="" For {
+		Set iFilter=$Order(filters(iFilter),1,filterData) If iFilter="" Quit
+		Set FilterStr=FilterStr_"|"_filterData
+	}
+
+	Set SavedFilterStr=""
+	Set iFilter="" For  {
+		 Set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,SaveSet,"F",iFilter),1,filterdata) If iFilter="" Quit
+		 Set SavedFilterStr=SavedFilterStr_"|"_filterdata
+	}
+	If isMerge,FilterStr'=SavedFilterStr Quit 0 ;error
+
+ 	If 'isMerge {
+ 		Kill ^iKnow.SetAnalysis(ProjectId,SaveSet)
+ 	}
+
+	Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"D",1)=Definition
+	Set PluginId=$List(Definition,2)
+	
+	Kill ^iKnow.SetAnalysis(ProjectId, SaveSet, "F")
+	Set iFilter="" For  {
+		Set iFilter=$Order(filters(iFilter)) If iFilter="" Quit
+		Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "F", $i(^iKnow.SetAnalysis(ProjectId, SaveSet, "F"))) = filters(iFilter)
+	}
+ 	;or resultEnt(iSort,entityId)
+ 	;or resultEnt(iSort,$list(entityId))
+ 	;or resultEnt(iSort,#,entityId)
+	Set iSort="" For  {
+		Set iSort=$Order(resultEnt(iSort)) If iSort="" Quit
+		Set Id="" For  {
+			Set Id=$Order(resultEnt(iSort,Id),1,data) If Id="" Quit
+			If $ListValid(Id) {
+				For iList=1:1:$ListLength(Id) {
+					Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,$List(Id,iList))
+					Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "X", $E(Value,1,450))=$List(Id,iList)
+				}
+			} elseif $Order(resultEnt(iSort,Id,""))="" {
+				Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,Id)
+				Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "X", $E(Value,1,450))=Id
+			} else {
+				Set subId=""
+				For  {
+					Set subId=$Order(resultEnt(iSort,Id,subId)) If subId="" Quit
+					Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,subId)
+					Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "X", $E(Value,1,450))=subId
+				}
+			}
+		}
+	}
+  	kill result
+	If $Data(metadataField) {
+		Set fieldName=metadataField
+	} else {
+		&sql(Select iKnowMetaField Into :metadataField From iKnow_SetAnalysis.Projects Where Id = :ProjectId)
+		Set fieldName=metadataField
+	}
+	set definition=$Get(^iKnow.SetAnalysis(ProjectId,SaveSet,"D",1))
+  	set Id="" For  {
+	  	set Id=$Order(entities(Id)) If Id="" Quit
+	  	set sort=$Get(^iKnow.SetAnalysisTemp(resultPtr,"SINC",entities(Id)))
+	  	If $ListValid(entities(Id)) {
+			For iList=1:1:$ListLength(entities(Id)) {
+				Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,$List(entities(Id),iList))
+				Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"E",$E(Value,1,450))=$List(entities(Id),iList)
+			}
+	  	} elseif sort'="",$order(resultEnt(sort,entities(Id),""))'="" {
+			Set subId=""
+			For  {
+				Set subId=$Order(resultEnt(sort,entities(Id),subId)) If subId="" Quit
+				Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,subId)
+				Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "E", $E(Value,1,450))=subId
+			}
+	  	} else {
+			Set Value=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,resultPtr,entities(Id))
+			Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"E",$E(Value,1,450))=entities(Id)
+	  	}
+  	}
+	Set iMember=""
+	For {
+		Set iMember=$Order(blacklistmembers(iMember)) If iMember="" Quit
+		Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"PX",blacklistmembers(iMember))=""
+	}
+	
+	Job ##class(iKnow.SetAnalysis).CalcMetaValues(ProjectId, resultPtr, SaveSet, PluginId)
+	Quit 1
+]]></Implementation>
+</Method>
+
+<Method name="CalcMetaValues">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,SaveSet,PluginId,CalcDependent:%Boolean=1</FormalSpec>
+<Implementation><![CDATA[
+	Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"E")=1
+	Do ##class(iKnow.SetAnalysisPlugin).SetMembers(PluginId, ProjectId, resultPtr, SaveSet)
+	Set ^iKnow.SetAnalysis(ProjectId,SaveSet,"E")=""
+	Set Member=""
+	For {
+		Set Member=$Order(^iKnow.SetAnalysis(ProjectId,SaveSet,"PX",Member)) If Member="" Quit
+		Do ..RemoveMemberFromSet(ProjectId,SaveSet,Member)
+	}
+	Do ##class(iKnow.SetAnalysis.Sets).SaveSet(ProjectId, SaveSet)
+	Do ##class(iKnow.SetAnalysis.Storage.Set).SaveSet(ProjectId, SaveSet)
+	If CalcDependent Do ..CalcDependent(ProjectId, SaveSet, 1)
+]]></Implementation>
+</Method>
+
+<Method name="RecalcId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,DeleteNonExisting=0</FormalSpec>
+<Implementation><![CDATA[
+	set entcount=0
+	Set Set="" For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId,Set)) If Set="" Quit
+		Do ..Log(Set)
+		Set PluginId=$ListGet(^iKnow.SetAnalysis(ProjectId,Set,"D",1),2)
+		For Type="E","XE","XNE" {
+			;how to know if entity, path, crc, ... -> plugin ?
+			Set entity="" For  {
+				Set entity=$Order(^iKnow.SetAnalysis(ProjectId,Set,Type,entity),1,oldid) If entity="" Quit
+				Set id=##class(iKnow.SetAnalysisPlugin).GetId(PluginId,ProjectId,"",entity)
+				set entcount=entcount+1 ;if id'=oldid w !,$zr
+				If id'="" {
+					Set ^iKnow.SetAnalysis(ProjectId,Set,Type,entity)=id
+				} else {
+					Set ^iKnow.SetAnalysis(ProjectId,Set,Type,entity)=oldid_"?"
+					If DeleteNonExisting Kill ^iKnow.SetAnalysis(ProjectId,Set,Type,entity)
+				}
+			}
+		}
+	}
+	;write !,"total entities : ",entcount
+]]></Implementation>
+</Method>
+
+<Method name="UpdateDEPRecords">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set Set=""
+	For  {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		Set Formula=$Get(^iKnow.SetAnalysis(ProjectId, Set, "D", 1))
+		If $List(Formula,1)>0 {
+			Do ..Formula(ProjectId, Set, $List(Formula,3))
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="Log">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Message:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set Now=$ZDate($H,8)
+	Set ^iKnow.SetAnalysisLog(Now,$i(^iKnow.SetAnalysisLog(Now)))=$ZT($P($H,",",2))_" "_$Get(Message)
+]]></Implementation>
+</Method>
+
+<Method name="LogExists">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Date:%String</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	If $Get(Date)="" Set Date=$ZD($H,8)
+	If $Order(^iKnow.SetAnalysisLog(Date,""))="" Quit 0
+	quit 1
+]]></Implementation>
+</Method>
+
+<Method name="DisplayLog">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Date:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If $Get(Date)="" Set Date=$ZD($H,8)
+	If $Order(^iKnow.SetAnalysisLog(Date,""))="" Quit 0
+	Set iLog="" For  {
+		Set iLog=$Order(^iKnow.SetAnalysisLog(Date,iLog),-1,Line) If iLog="" Quit
+		Write $ZCVT(Line,"O","HTML"),"<br>",!
+	}
+	Quit ""
+]]></Implementation>
+</Method>
+
+<Method name="GetDependencies">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId:%Integer,&Dep:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	#Dim Set, Def, Formula as %String
+	Set Set="" For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		Set Def = $Get(^iKnow.SetAnalysis(ProjectId, Set, "D", 1))
+		Set Formula=$ZCVT($Select(Def="":"",$List(Def,1)=0:"",1:$List(Def,3)),"U")
+		Set Formula=$Select($E(Formula,1,4)="SCORE":"Score",(" "_Formula_" ")[" AND ":"And",(" "_Formula_" ")[" OR ":"Or",(" "_Formula_" ")[" ANDNOT ":"AndNot",1:"")
+		If $Order(^iKnow.SetAnalysis(ProjectId, Set, "DEP",""))="" {
+			Set Dep(1,Set)=Formula
+			Set Dep("S",Set)=1
+		} else {
+			Set Dep(2,Set)=Formula
+			Set Dep("S",Set)=2
+			Merge Dep(2,Set)=^iKnow.SetAnalysis(ProjectId, Set, "DEP")
+		}
+	}
+	Set Ok=1
+	Set Level=1
+	For {
+		Set Level=Level+1
+		If '$Data(Dep(Level)) Quit
+		Set Set="" For  {
+			Set Set=$Order(Dep(Level,Set)) If Set="" Quit
+			Set LevelHigher=0
+			Set DepSet="" For {
+				Set DepSet=$Order(Dep(Level,Set,DepSet)) If DepSet="" Quit
+				If '$Data(Dep("S",DepSet)) Set Dep("S",DepSet)=0
+				If Dep("S",DepSet)'<Level Set LevelHigher=1 Quit  ;depends on set in this or higher level 
+			}
+			If LevelHigher {
+				Set Dep("S",Set)=Level+1
+				Merge Dep(Level+1,Set)=Dep(Level,Set)
+				Kill Dep(Level,Set)
+			}
+		}
+		If '$Data(Dep(Level)) Write "Cicular reference" Set Ok=0 Quit
+	}
+]]></Implementation>
+</Method>
+
+<Method name="UpdateAllSets">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer</FormalSpec>
+<Implementation><![CDATA[
+	Lock +^iKnow.SetAnalysis(ProjectId,"UPDATEALL"):0 Else  Do ..Log("Update already running") Quit
+	Try {
+		Do ..Log("Update All Sets started ...")
+		Do ..Log("Recalculating Id's for all sets ...")
+		Do ..RecalcId(ProjectId,0)	
+		Do ..Log("Dependencies")	
+		Do ..GetDependencies(ProjectId, .Dep)
+
+		;kill all secondary tabels
+		Do ..Log("Deleting secondary tabels ...")
+		&sql(Delete From iKnow_SetAnalysis.SetMembers Where SetId->ProjectId = :ProjectId)
+		&sql(Delete From iKnow_SetAnalysis.SetKeyValues Where SetId->ProjectId = :ProjectId)
+		;TODO : add project in SetKeyValueMembers table, and only delete ProjectId
+		Do ##class(iKnow.SetAnalysis.SetKeyValueMembers).%DeleteExtent()
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		Set Level="" For  {
+			Set Level=$Order(Dep(Level)) If (Level="")!(Level="S") Quit
+			Set Set="" For {
+				Set Set=$Order(Dep(Level,Set)) If Set="" Quit
+				Do ..Log("Calculating set "_Set)
+				Kill ^iKnow.SetAnalysis(ProjectId, Set, "P")
+				Kill ^iKnow.SetAnalysis(ProjectId, Set, "M")
+				Set Formula=$Get(^iKnow.SetAnalysis(ProjectId, Set, "D", 1))
+				If $List(Formula,1)=0 {
+					Set objFilter=""
+					Set iFilter="" For {
+						Set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,Set,"F",iFilter),1,FilterData) If iFilter="" Quit
+						Do ..BuildFilter(DomainId, $List(FilterData,1), $List(FilterData,2), $List(FilterData,3), .objFilter)
+					}
+					Set dataDef=$Get(^iKnow.SetAnalysis(ProjectId,Set,"D",1))
+					If $ListGet(dataDef,1)=0 {  ;api
+						Set plugin=$List(dataDef,2)
+						Set input=$List(dataDef,3)
+						Set set=$listget(dataDef,4)
+						set pattern=$listget(dataDef,7)
+						Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(plugin, ProjectId, input, pattern,set, ,objFilter,.resultPtr)
+					}
+					Do ..CalcMetaValues(ProjectId, resultPtr, Set, plugin ,0)
+				} else {
+					Do ..Formula(ProjectId, Set, $List(Formula,3))
+				}
+
+			}
+		}
+		Do ..Log("Update All Sets finished")
+	} catch {
+		Do ..Log("Update finished with error "_$ZE)
+	}
+	
+	Lock -^iKnow.SetAnalysis("UPDATEALL")
+]]></Implementation>
+</Method>
+
+<Method name="NewConcepts">
+<Description>
+for all sets, this method will calc which new concepts are new in the domain
+the user will have to indicate (separate csp page) for each which should be selected for the set</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set Set="" For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+
+		Merge filters = ^iKnow.SetAnalysis(ProjectId,Set, "F")
+		Set objFilter=""
+		Set iFilter="" For {
+			Set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,Set,"F",iFilter),1,FilterData) If iFilter="" Quit
+			Do ..BuildFilter(DomainId, $List(FilterData,1), $List(FilterData,2), $List(FilterData,3), .objFilter)
+		}
+
+		;depending on definition, call api to get original list(s)
+		Set inEntSet=0
+		Set data=$get(^iKnow.SetAnalysis(ProjectId, Set,"D",1))
+		If $List(data,1)=0 {  ;api
+			Set api=$List(data,2)
+			Set ent=$List(data,3)
+			set set=$listget(data,4)
+			set pattern=$listget(data,7)
+			Kill InTempSet
+			Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(api, ProjectId, ent,pattern,set, ,objFilter,.inTempSet)
+			Set Sort="" For {
+				Set Sort=$Order(InTempSet(Sort)) If Sort="" Quit
+				Set EntityTypeId="" For {
+					Set EntityTypeId=$Order(InTempSet(Sort,EntityTypeId)) If EntityTypeId="" Quit
+					Set EntityType=$ZCVT($Piece(EntityTypeId," ",1),"U")
+					If EntityType="ent" set EntityType="E"
+					Set EntityId=$Piece(EntityTypeId," ",2)
+					Set Entity=InTempSet(Sort,EnitiyTypeId)
+					If '$Data(^iKnow.SetAnalysis(ProjectId,Set,EntityType," "_Entity)),'$Data(^iKnow.SetAnalysis(ProjectId,Set,"X"_EntityType," "_Entity)) {
+						Set ^iKnow.SetAnalysis(ProjectId,Set,"XN"_EntityType," "_Entity)=EntityId
+					}
+				}
+	  		}
+  		}
+  	}
+]]></Implementation>
+</Method>
+
+<Method name="ExportToDictionary">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,DictName:%String="SetAnalysis"</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	If DomainId=0 Quit
+	Set DictId = ##class(%iKnow.Matching.DictionaryAPI).GetDictionaryId(DomainId, DictName, .sc)
+	If sc=1 Do ##class(%iKnow.Matching.DictionaryAPI).DropDictionary(DomainId, DictId)
+	Set DictId = ##class(%iKnow.Matching.DictionaryAPI).CreateDictionary(DomainId, DictName, "Generated from SetAnalysis")
+	Set Set="" For {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		Set ItemId = ##class(%iKnow.Matching.DictionaryAPI).CreateDictionaryItem(DomainId, DictId, Set, DomainId_DictId_Set)
+
+		Set Entity="" For {
+			Set Entity = $Order(^iKnow.SetAnalysis(ProjectId,Set,"E",Entity)) If Entity="" Quit
+			Set TermId = ##class(%iKnow.Matching.DictionaryAPI).CreateDictionaryTerm(DomainId, ItemId, $E(Entity, 2, *))
+		}
+	}
+	
+	Set sc = ##class(%iKnow.Matching.MatchingAPI).MatchEntityUniques(DomainId)
+	Set sc = ##class(%iKnow.Matching.MatchingAPI).MatchSources(DomainId)
+]]></Implementation>
+</Method>
+
+<Method name="CalcDependent">
+<Description>
+Re-calculate all sets that depend on a given set</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,SaveSet,init</FormalSpec>
+<Implementation><![CDATA[
+	If init kill ^||iKnow.SetAnalysis.Recalc
+	Kill Recalc
+	Set Set="" for  {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId, Set)) If Set="" Quit
+		If $Data(^iKnow.SetAnalysis(ProjectId, Set, "DEP", SaveSet)) {
+			;this set is dependent, recalc
+			;
+
+			Set Formula=$Get(^iKnow.SetAnalysis(ProjectId, Set, "D", 1))
+			If $List(Formula,1)>0 {
+				Do ..Formula(ProjectId, Set, $ListGet(Formula,3),$ListGet(Formula,5),$listGet(Formula,6),,$listGet(Formula,8))
+				If '$Data(^||iKnow.SetAnalysis.Recalc(Set)) {
+					Set Recalc(Set)=""
+					Set ^||iKnow.SetAnalysis.Recalc(Set)="" 
+				}
+			}
+		}
+	}
+	;recursively recalc set's that depend on changed set's
+	Set Set="" for  {
+		Set Set=$Order(Recalc(Set)) If Set="" Quit
+		Do ..CalcDependent(ProjectId, Set, 0)
+	}
+	;
+]]></Implementation>
+</Method>
+
+<Method name="BuildFilterFromSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,objFilter</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set objFilter=""
+	Set iFilter="" For {
+		Set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,Set,"F",iFilter),1,FilterData) If iFilter="" Quit
+		Do ..BuildFilter(DomainId, $List(FilterData,1), $List(FilterData,2), $List(FilterData,3), .objFilter)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="BuildFilter">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId,Field,Operator,Value,objGrpFilter</FormalSpec>
+<Implementation><![CDATA[
+	Set objFilter=##class(%iKnow.Filters.SimpleMetadataFilter).%New(DomainId,Field,Operator,Value)
+	If objGrpFilter="" {
+		Set objGrpFilter=##class(%iKnow.Filters.GroupFilter).%New(DomainId)
+	}
+	Do objGrpFilter.AddSubFilter(objFilter)
+]]></Implementation>
+</Method>
+
+<Method name="GetFormula">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,Set,&DeepSeeEnabled:%Boolean,&RestEnabled:%Boolean,&SetDescription:%String,&Operator:%String]]></FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set Formula=""
+	Set Definition = $Get(^iKnow.SetAnalysis(ProjectId, Set, "D", 1))
+	Set Formula=$list(Definition,3)
+	Set DeepSeeEnabled = +$ListGet(Definition, 5)
+	Set RestEnabled = +$ListGet(Definition, 6)
+	Set SetDescription = $ListGet(Definition, 8)
+	Set lFormula=$zcvt(Formula,"l")
+	Set Operator=$Select(lFormula[" and ":"AND",lFormula[" or ":"OR",lFormula[" andnot ":"ANDNOT",lFormula[" andnotsentence ":"ANDNOTSENTENCE",$E(lFormula,1,6)="score ":"SCORE",$E(lFormula,1,8)="extract ":"EXTRACT",1:"")
+	Quit Formula
+]]></Implementation>
+</Method>
+
+<Method name="GetResultSet">
+<Description>
+Return all entities for a saved set</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,*resultPtr:%String,*selEntSet,FromSet:%String,&filters:%String,Definition:%String,&blacklistmembers:%String,&DeepSeeEnabled:%Boolean,&RestEnabled:%Boolean,&SetDescription:%String]]></FormalSpec>
+<Implementation><![CDATA[
+	Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	;use saved set to set 'selected' options:
+	Set iEnt="" For iCount=1:1 {
+		Set iEnt=$Order(^iKnow.SetAnalysis(ProjectId,FromSet,"E",iEnt),1,data) If iEnt="" Quit
+		Set selEntSet(data)=""
+	}
+	Merge filters = ^iKnow.SetAnalysis(ProjectId,FromSet, "F")
+	Set objFilter=""
+	Set iFilter="" For {
+		Set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,FromSet,"F",iFilter),1,FilterData) If iFilter="" Quit
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		Do ..BuildFilter(DomainId, $List(FilterData,1), $List(FilterData,2), $List(FilterData,3), .objFilter)
+	}
+
+	Set Definition=$Get(^iKnow.SetAnalysis(ProjectId,FromSet, "D", 1))
+	Set DeepSeeEnabled = +$ListGet(Definition, 5)
+	Set RestEnabled = +$ListGet(Definition, 6)
+	Set SetDescription = $ListGet(Definition, 8)
+	;depending on definition, call api to get original list(s) (only if not Batch)
+	Set inEntSet=0
+	Set IsBatch = $ListGet($Get(^iKnow.SetAnalysis(ProjectId, FromSet)), 1) '= ""
+	Set IsUpToDate = +$ListGet(Definition, 9) 
+	set ^dwdebug($i(^dwdebug))=IsUpToDate
+	If IsBatch ! IsUpToDate { 
+		Set Value="" For iCount=1:1 {
+			Set Value=$Order(^iKnow.SetAnalysis(ProjectId,FromSet,"X",Value),1,Id) If Value="" Quit
+			Set Freq=1  ;should get freq from iKnow
+			Set sort=" "_$J(99999999-Freq,8)_$ZCVT(Value,"U")
+			Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,Id)=$ListBuild(Value)
+			Set inEntSet=inEntSet+1
+		}
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=inEntSet
+	} else {
+		Set dataDef=$Get(^iKnow.SetAnalysis(ProjectId,FromSet,"D",1))
+		If $ListGet(dataDef,1)=0 {  ;api
+			Set plugin=$List(dataDef,2)
+			Set input=$List(dataDef,3)
+			Set set=$listget(dataDef,4)
+			Set pattern=$ListGet(dataDef,7)
+			Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(plugin, ProjectId, input, pattern, set, ,objFilter,.resultPtr)
+		}
+	}
+	Kill blacklistmembers
+	Set blacklistmembers=0
+	Set Member=""
+	For {
+		Set Member=$Order(^iKnow.SetAnalysis(ProjectId,FromSet,"PX", Member)) If Member="" Quit
+		Set blacklistmembers(Member)=""
+		Set blacklistmembers=blacklistmembers+1
+	}
+]]></Implementation>
+</Method>
+
+<Method name="OutputTreeSub">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Dep,Tree,Done,Level,Set,CumulSet</FormalSpec>
+<Implementation><![CDATA[
+	#Dim SubSet, NextLevel as %String
+	#Dim iSub as %Integer
+	Set SubSet="" For iSub=1:1 {
+		Set SubSet=$Order(Dep(Level, Set, SubSet)) If SubSet="" Quit
+		Set Tree($I(Tree))=$listBuild(CumulSet_"."_$TRanslate(Set,".","²")_"."_$Translate(SubSet,".","²"),SubSet,$Select(iSub>1:$Select(Dep(Level,Set)="":"",1:"("_Dep(Level,Set)_")"),1:""))
+		Set Done(SubSet)=""
+		Set NextLevel=Dep("S",SubSet)
+		Do ..OutputTreeSub(.Dep, .Tree, .Done, NextLevel, SubSet, CumulSet_"."_$TRanslate(Set,".","²"))  ;_"."_$Translate(SubSet,".","²"))
+	}
+]]></Implementation>
+</Method>
+
+<Method name="OutputTree">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,SessionSet,SetFilter="",Tab="detail"</FormalSpec>
+<Implementation><![CDATA[
+	#Dim Dep, Level, Set, Tree, Done,CumulSet, SubSet, NextLevel as %String
+	#Dim iSub as %Integer
+	Do ..GetDependencies(ProjectId, .Dep)
+	Set Level="S" For {
+		Set Level=$Order(Dep(Level),-1) If (Level="") Quit
+		Set Set="" For {
+			Set Set=$Order(Dep(Level,Set)) If Set="" Quit
+			If $Data(Done(Set)) Continue
+			Set Tree($I(Tree))=$listBuild($Select(Level=1:"NoDependencies.",1:"")_$Translate(Set,".","²"),Set,"")
+			Set Done(Set)=""
+			Set CumulSet=$Translate(Set,".","²")
+			Set SubSet=""
+			For iSub=1:1 {
+				Set SubSet=$Order(Dep(Level,Set,SubSet)) If SubSet="" Quit
+				Set NextLevel=Dep("S",SubSet)
+				Set Tree($I(Tree))=$listBuild(CumulSet_"."_$Translate(SubSet,".","²"),SubSet,$Select(iSub>1:$Select(Dep(Level,Set)="":"",1:"("_Dep(Level,Set)_")")_" ",1:""))
+				Set Done(SubSet)=""
+				Do ..OutputTreeSub(.Dep, .Tree, .Done, NextLevel, SubSet, CumulSet)
+			}
+		}
+	}
+
+	Write "<ul id='LinkedList1' class='LinkedList'>",!
+	Set CurrentLevel=0,CurrentPackage=""
+	Set iTree="" For  {
+		Set iTree=$Order(Tree(iTree)) If iTree="" Quit
+		Set LoopSet=$List(Tree(iTree),1)
+		Set DisplaySet=$List(Tree(iTree),3)_" "_$List(Tree(iTree),2)
+		Set RealSet=$List(Tree(iTree),2)
+		Set Package=$Piece(LoopSet,".",1,$Length(LoopSet,".")-1)
+		Set Set=$Piece(LoopSet,".",$Length(LoopSet,"."))
+		Set Level=$S(Package="":0,1:$Length(Package,"."))
+		If (Level'=CurrentLevel)!((Package'=CurrentPackage)) {
+			//go back 1 level till package is continuation of currentpackage
+			For iMove=1:1 {
+				If CurrentLevel=0 Quit
+				;b "S+"
+				If $Piece(CurrentPackage,".",1,CurrentLevel) = $Piece(Package,".",1,CurrentLevel) Quit
+				Set CurrentLevel=CurrentLevel-1
+				Write "</li>",!
+				Write "</ul>",!
+			}
+			//go further 1 level till level = level of package
+			For iMove=1:1 {
+				If CurrentLevel'<Level Quit
+				Set CurrentLevel=CurrentLevel+1
+				Write "<li>",$ListGet(Tree(iTree),4)," ",$Translate($P(Package,".",CurrentLevel),"²","."),!
+				Write "<ul class='ulblock'>",!
+			}
+			
+		}
+		Set NextSet="" Set iNextSet=$Order(Tree(iTree),1,NextSet)
+		If NextSet'="",$TR($E($List(NextSet,1),1,$Length(LoopSet)+1),"²",".")=($TR(LoopSet,"²",".")_".") {
+			//next set is package of currentset -> display nothing
+			set $List(Tree(iNextSet),4)=$List(Tree(iTree),3)
+		} else {
+			Write "<li>",DisplaySet," "
+			If $Get(^iKnow.SetAnalysis(ProjectId,RealSet,"D",1))'="" {
+				Write "<a href='iKnowSetAnalysis.csp?action=",$S(0:"editcalcset",1:"editset"),"&set=",$$$OUT(RealSet),"'><img src='edit.gif' title='edit this set' border=0></a>"
+			}
+			Write "</li>",!
+		}
+		Set CurrentPackage=Package
+	}		
+	Write "</ul>"
+	Quit
+]]></Implementation>
+</Method>
+
+<Method name="OutputSets">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,SessionSet,SetFilter="",Tab="detail"</FormalSpec>
+<Implementation><![CDATA[
+	#Dim PrevPackages, Packages, Package, Set, SubPackage, FirstDef, ThisDef, Member, filterdata as %String
+	#Dim SetRepositories, SetRepClass, FullSetName, SetName, SetNameDisplayed as %String
+	#Dim iPackage, jPackage, iCol, iDef, iCount, iFilter, iSetRep as %Integer
+	#Dim Display, CalcSet as %Boolean
+	#Dim objSet as %DeepSee.Sets.ArraySetRepository
+	#Dim objResultSet as %SQL.StatementResult
+	If Tab="treeview" Do ..OutputTree(ProjectId, .SessionSet, SetFilter, Tab) Quit
+	Kill PrevPackages
+	If ProjectId="" Quit
+	Write "<table  id='gradient-style'>"
+	Set Package=""
+	Set SetRepositories=""
+	;if ProjectId contains setrepositories, show them with import button
+	&sql(Select SetRepositories Into :SetRepositories From iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+	If SQLCODE=0 {
+		For iSetRep=1:1:$ListLength(SetRepositories) {
+			Set SetRepClass=$List(SetRepositories,iSetRep)
+			;get the sets and display them
+			Set objSet=$ClassMethod(SetRepClass,"GetNames")
+			//todo: we could use GetFilteredNames("pluginId","=1") to only see sets that originated from SetAnalysis
+			Set objResultSet=objSet.GetResultSet()
+			While objResultSet.%Next() {
+				;only display sets that are not in SetAnalysis storage
+				;Name = ProjectName.SetName:Elements or :Entities or :Sources
+				Set FullSetName = objResultSet.%GetData(1)
+				If '##class(iKnow.SetAnalysis.Storage.SetRepApi).ExistsInSetAnalysis(SetRepClass,FullSetName) {
+					;todo : show all sets with the same project.name:* as one set
+					Set SetName=$Piece(FullSetName,":",1)
+					If SetName'="",'$Data(SetNameDisplayed(SetName)) {
+						write "<tr><td colspan=2>",SetName,"<a href='iKnowSetAnalysis.csp?action=import&set=",$$$OUT(SetName),"'><img src='import.png' title='import a set from the Set Repository'/></a></td></tr>"
+						Set SetNameDisplayed(SetName)=""
+					}
+				}
+			}
+			Kill SetNameDisplayed  ;next repository might have same names & get don't need big array in memory
+		}
+	}
+	Set Set="" For  {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId,Set)) If Set="" Quit
+		Set Package=$S(Set[".":$Piece(Set,".",1,$Length(Set,".")-1),1:"")
+		If SetFilter'="",'$Data(^iKnow.SetAnalysis(ProjectId,Set,"P",SetFilter)) Continue
+		If Package'="" {
+			For iPackage=1:1:$L(Package,".") {
+				Set SubPackage=$Piece(Package,".",1,iPackage)
+				If $Data(PrevPackages(SubPackage)) Continue
+				Set PrevPackages(SubPackage)=""
+				Set Display=1
+				If SubPackage["." For jPackage=1:1:$l(SubPackage,".")-1 If '$Get(SessionSet($P(SubPackage,".",1,jPackage),"package")) Set Display=0 quit
+				If 'Display continue
+				If '$Data(Packages(SubPackage)) {
+					Write "<tr>"
+					write "<td>" for iCol=1:1:iPackage write "&nbsp;" ;"<td",$S(iCol=iPackage:" colspan=999",1:"")_">"
+					If '$Get(SessionSet(SubPackage,"package")) {
+						Write "<a href='iKnowSetAnalysis.csp?action=detail&set=",$$$OUT(SubPackage),"&type=package'><img src='plus.gif' border=0></a>"
+					} else {
+						Write "<a href='iKnowSetAnalysis.csp?action=nodetail&set=",$$$OUT(SubPackage),"&type=package'><img src='minus.gif' border=0></a>"
+					}
+					Write "<b>",SubPackage,"</b>"
+					write "</td>" ;for iCol=1:1:iPackage Write "</td>"
+					write "</tr>"
+				}
+			}
+		}
+		Set Display=1 If Package'="" For iPackage=1:1:$L(Package,".") If '$Get(SessionSet($P(SubPackage,".",1,iPackage),"package")) Set Display=0 Quit
+		If Display=0 Continue
+		If Package'="",'$Get(SessionSet(Package,"package")) Continue
+		set iPackage=$Length(Set,".")
+		set iDef=$Order(^iKnow.SetAnalysis(ProjectId,Set,"D",""),1,FirstDef)
+		Set CalcSet=0 If iDef'="",$List(FirstDef,1) Set CalcSet=1
+		Write "<tr valign='top'>"
+		write "<td>" for iCol=1:1:iPackage-1 write "&nbsp" ;"<td",$S(iCol=(iPackage-1):" colspan=999",1:"")_">"
+		write "<b>"
+		Write $S(Package="":Set,1:"&nbsp;&nbsp;&nbsp;."_$P(Set,".",$L(Set,"."))),"</b>&nbsp;"
+		Set BatchId=$ListGet($Get(^iKnow.SetAnalysis(ProjectId, Set)), 1)
+		If (BatchId'="") {
+			&sql(Select Started, Ended, Error Into :BatchStarted, :BatchEnded, :BatchError
+			     From iKnow_SetAnalysis.Batches
+			     Where ID = :BatchId)
+		} else {
+			Set (BatchStarted, BatchEnded, BatchError)=""
+		}
+		If (BatchId="")!(BatchEnded_BatchError'="") {
+			Write "<a href='iKnowSetAnalysis.csp?action=delset&set=",$$$OUT(Set),"'><img valign='bottom' src='delete.png' title='delete this set' border=0></a>&nbsp;"
+		}
+
+		set ThisDef=$Get(^iKnow.SetAnalysis(ProjectId,Set,"D",1))
+
+		If ($Get(^iKnow.SetAnalysis(ProjectId,Set,"E"))'="") {
+		} else {
+			If (BatchId="")!(BatchEnded'="") {
+				If ThisDef'="" write "<a href='iKnowSetAnalysis.csp?action=",$S(CalcSet:"editcalcset",1:"editset"),"&set=",$$$OUT(Set),"'><img valign='bottom' src='edit.gif' title='edit this set' border=0></a>"
+			}
+		}
+		Write "</td>"
+		Write "<td>"
+		If (BatchId'="") {
+			Write "Started "_BatchStarted,"<br>"
+			Write $Select(BatchError'="":"Error : "_BatchError,BatchEnded="":"Running ...",1:"Finished "_BatchEnded),"<br>"
+		}
+		If ThisDef="" {
+			Write ""  ;no definition : only elements in this set
+		} elseif $List(ThisDef,1)=0 {
+			Set Plugin=$List(ThisDef,2)
+			&sql(Select Name Into :PluginName From iKnow.SetAnalysisPlugin Where ID = :Plugin)
+			If SQLCODE=0 Write PluginName," "
+			If $ListData(ThisDef,3) Write $List(ThisDef,3)," "
+			If $ListGet(ThisDef,4)'="" Write "Set ",$List(ThisDef,4)
+		} else {
+			Write $ListGet(ThisDef,3)
+		}
+		If Tab="overview" {
+			Set Member=""
+			For iCount=0:1 {
+				Set Member=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Member))
+				If Member="" Quit
+			}
+			Write "&nbsp;(",iCount,")"
+		}
+		If ThisDef'="",$ListGet(ThisDef,8)'="" Write "<br><i>",$List(ThisDef,8),"</i>"
+		write "</td></tr>"
+
+		If Tab="detail" {
+			If $Data(^iKnow.SetAnalysis(ProjectId,Set,"F")) {
+				write "<tr><td></td>"
+				Write "<td>"
+				Set iFilter="" For iCount=1:1 {
+					set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,Set,"F",iFilter),1,filterdata) If iFilter="" Quit
+					If iCount>5,'$Get(SessionSet(Set,"F")) {
+						Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detail&set=",$$$OUT(Set),"&type=F'>more</a>"
+						Quit
+					} else {
+						Write $List(filterdata,1),"&nbsp;",$list(filterdata,2),"&nbsp;",$listget(filterdata,4)
+						if $Order(^iKnow.SetAnalysis(ProjectId, Set,"F",iFilter))'="" write ", "
+					}
+				}
+				If iCount>6 Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=nodetail&set=",$$$OUT(Set),"&type=F'>less</a>"
+				write "</td></tr>"
+			}
+			;entities section:
+			If $Order(^iKnow.SetAnalysis(ProjectId,Set,"E",""))'="" {
+				write "<tr><td></td>"
+				Write "<td>"
+				Set Ent="",iCount=0,Length=0 For  {
+					set Ent=$Order(^iKnow.SetAnalysis(ProjectId,Set,"E",Ent)) If Ent="" Quit
+					Set iCount=iCount+1
+					Set Length=Length+$Length(Ent)
+					;If iCount>5 Quit
+					If Length>50 Quit
+				}
+				If Length>50 {  ;iCount>5 {
+					If $Get(SessionSet(Set,"E")) {
+						Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=nodetail&set=",$$$OUT(Set),"&type=E'><img src='minus.gif' border=0></a>&nbsp;"
+					} else {
+						Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detail&set=",$$$OUT(Set),"&type=E'><img src='plus.gif' border=0></a>&nbsp;"
+					}
+				}
+				Set Ent="",iCount=0,Length=0 For  {
+					set Ent=$Order(^iKnow.SetAnalysis(ProjectId,Set,"E",Ent)) If Ent="" Quit
+					Set iCount=iCount+1
+					Set Length=Length+$Length(Ent)
+					;If iCount>5,'$Get(SessionSet(Set,"E")) Quit
+					If Length>50,'$Get(SessionSet(Set,"E")) Quit
+					Write Ent
+					if $Order(^iKnow.SetAnalysis(ProjectId,Set,"E",Ent))'="" write ", "
+				}
+				Write "&nbsp;<a href='iKnowSetAnalysisExport.csp?action=export&set=",$$$OUT(Set),"&type=E'><img src='excel.gif' border=0 title='export selected entities'></a>"
+				Write "&nbsp;<a href='iKnowSetAnalysisExport.csp?action=export&set=",$$$OUT(Set),"&type=X'><img src='excel0.gif' border=0 title='export non-selected entities'></a>"
+
+				write "</td></tr>"
+			}
+			;members/patients section:
+			Set iCount=0,DisplaySection=0
+			If ($Get(^iKnow.SetAnalysis(ProjectId,Set,"E"))'="") {
+				Do ..OutputPatHeader(.DisplaySection)
+				Write "calculating ...<a href ='iKnowSetAnalysis.csp?action=refresh'>refresh</a>"
+			} else {
+				If SetFilter'="" {
+					If $Data(^iKnow.SetAnalysis(ProjectId,Set,"P",SetFilter)) {
+						Do ..OutputPatHeader(.DisplaySection)
+						Do ..OutputPat(ProjectId,Set,SetFilter)
+					}
+				} elseIf $Data(^iKnow.SetAnalysis(ProjectId,Set,"PS")) {
+					Do ..OutputPatHeader(.DisplaySection)
+					Set Score="" For  {
+						set Score=$Order(^iKnow.SetAnalysis(ProjectId,Set,"PS",Score),-1) If Score="" Quit
+						Set Pat="" For  {
+							set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"PS", Score, Pat)) If Pat="" Quit
+							Set iCount=iCount+1
+							If iCount>5 quit
+						}
+					}
+					If iCount>5 {
+						If $Get(SessionSet(Set,"P")) {
+							Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=nodetail&set=",$$$OUT(Set),"&type=P'><img src='minus.gif' border=0></a>&nbsp;"
+						} else {
+							Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detail&set=",$$$OUT(Set),"&type=P'><img src='plus.gif' border=0></a>&nbsp;"
+						}
+					}
+					Set iCount=0
+					Set Score="" For  {
+						set Score=$Order(^iKnow.SetAnalysis(ProjectId,Set,"PS",Score),-1) If Score="" Quit
+						Set Pat="" For  {
+							set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"PS", Score, Pat)) If Pat="" Quit
+							Set iCount=iCount+1
+							If iCount>5,'$Get(SessionSet(Set,"P")) Quit
+							Do ..OutputPat(ProjectId,Set,Pat)
+						}
+					}
+				} else {
+					Set Pat="" For {
+						set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat)) If Pat="" Quit
+						Set iCount=iCount+1
+						If iCount>5 Quit
+					}
+					If iCount>0 {
+						Do ..OutputPatHeader(.DisplaySection)
+						If iCount>5 {
+							If $Get(SessionSet(Set,"P")) {
+								Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=nodetail&set=",$$$OUT(Set),"&type=P'><img src='minus.gif' border=0></a>&nbsp;"
+							} else {
+								Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detail&set=",$$$OUT(Set),"&type=P'><img src='plus.gif' border=0></a>&nbsp;"
+							}
+						}
+					
+						Set Pat="" For iCount=0:1 {
+							set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat)) If Pat="" Quit
+							If iCount>4,'$Get(SessionSet(Set,"P")) Quit
+							Do ..OutputPat(ProjectId,Set,Pat)
+						}
+					}
+				}			
+
+				if iCount>0 {
+					Write "&nbsp;<a href='iKnowSetAnalysisExport.csp?action=export&set=",$$$OUT(Set),"&type=P'><img src='excel.gif' border=0 title='export this metadatfield for all members to excel'></a>"
+					Write "&nbsp;<a href='iKnowSetAnalysisExport.csp?action=exportall&set=",$$$OUT(Set),"&type=P'><img src='excelplus.gif' border=0 title='export all metadatafields for all members to excel'></a>"
+				}
+			}
+			If DisplaySection Do ..OutputPatFooter()
+		} else {
+			
+		}
+		write "</td>"		    
+	}
+	write "</table>"
+]]></Implementation>
+</Method>
+
+<Method name="OutputPatHeader">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&DisplaySection:%Boolean]]></FormalSpec>
+<Implementation><![CDATA[
+	Set DisplaySection = 1
+	write "<tr><td></td><td>"
+]]></Implementation>
+</Method>
+
+<Method name="OutputPatFooter">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[	write "</td></tr>"
+]]></Implementation>
+</Method>
+
+<Method name="OutputPat">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,Pat</FormalSpec>
+<Implementation><![CDATA[
+	Set URLOut="<a href='iKnowSetAnalysisDetail.csp?action=sentences&set="_$$$OUT(Set)_"&metavalue="_Pat_"' onclick=""Popup(this.href);return false"">"
+	Write URLOut
+	Set Negation=""
+	Set SrcId=""
+	For {
+		Set SrcId=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat,SrcId)) If SrcId="" Quit
+		If ^iKnow.SetAnalysis(ProjectId,Set,"P",Pat,SrcId)=2 {
+			If Negation="" Set Negation=2
+			If Negation=0 Set Negation=1
+		} elseif ^iKnow.SetAnalysis(ProjectId,Set,"P",Pat,SrcId)=1 {
+			Set Negation=1
+		} else {
+			If Negation=2 Set Negation=1
+			If Negation="" Set Negation=0
+		}
+	}
+	Write $Select(Negation=2:"<span class='all_negation'>",Negation:"<span class='some_negation'>",1:"<span class='no_negation'>"),Pat,"</span>"
+	Set Score=$Get(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat))
+	If $ListValid(Score),$LL(Score)>0 {
+		Set Score=$List(Score,1)
+	}
+	If Score>0 Write "[",Score,"]"
+	Write "</a>"
+	if $Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat))'="" write ", "
+]]></Implementation>
+</Method>
+
+<Method name="OutputMetaDetail">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,metavalue,AllSources:%Boolean=0</FormalSpec>
+<Implementation><![CDATA[
+	#Dim prevMetavalue,nextMetavalue,Definition as %String
+	If ProjectId="" Quit
+	Write "<table  id='gradient-style'>"
+
+	Set prevMetavalue=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue),-1)
+	Set nextMetavalue=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue))
+	If (prevMetavalue_nextMetavalue)'="" {
+		Write "<tr>"
+		Write "<td style='text-align: left;'>"
+		If prevMetavalue'="" {
+			write "<a href='iKnowSetAnalysisDetail.csp?action=sentences&set=",$$$OUT(Set),"&metavalue=",prevMetavalue,"'><img valign='bottom' src='prev.png'></a>"
+		}
+		write "</td>"
+		Write "<td style='text-align: right;'>"
+		If nextMetavalue'="" {
+			Write "<a href='iKnowSetAnalysisDetail.csp?action=sentences&set=",$$$OUT(Set),"&metavalue=",nextMetavalue,"'><img valign='bottom' src='next.png'></a>"
+		}
+		write "</td></tr>"
+	}
+
+	Write "<tr valign='top'>","<td>Set</td><td><b>",Set,"</b></td></tr>"
+	Set Definition=$Get(^iKnow.SetAnalysis(ProjectId,Set,"D",1))
+	Set TermType=""
+	If Definition'="" {
+		If $List(Definition,1)=0 {
+			Set PluginId=$List(Definition,2)
+			&sql(Select TermType Into :TermType From iKnow.SetAnalysisPlugin Where Id = :PluginId)
+		}
+		Write "<tr><td>Definition</td><td>"
+		Write $List(Definition,3)
+		write "</td></tr>"
+	}
+
+		If $Data(^iKnow.SetAnalysis(ProjectId,Set,"F")) {
+			write "<tr><td>Filters</td><td>"
+			Set iCount=0
+			Set iFilter="" For  {
+				set iFilter=$Order(^iKnow.SetAnalysis(ProjectId,Set,"F",iFilter),1,data) If iFilter="" Quit
+				Write $List(data,1),"&nbsp;",$List(data,2),"&nbsp;",$List(data,3)
+				if $Order(^iKnow.SetAnalysis(ProjectId,Set,"F",iFilter))'="" write ", "
+			}
+			write "</td></tr>"
+		}
+
+		If ($Data(^iKnow.SetAnalysis(ProjectId,Set,"E"))) {
+			write "<tr valign='top'><td>Entities<br><a id='entityText' href='javascript:entityToggle();'>show</a></td><td>"
+			write "<div id='entityBlock' style='display: none'>"
+			Set iCount=0
+			Set Ent="" For  {
+				set Ent=$Order(^iKnow.SetAnalysis(ProjectId,Set,"E",Ent)) If Ent="" Quit
+				Write Ent
+				if $Order(^iKnow.SetAnalysis(ProjectId,Set,"E",Ent))'="" write ", "
+			}
+			write "</div></td></tr>"
+		}
+		
+		//todo : proper metaname
+		&sql(Select iKnowMetafield into :iKnowMetafield from iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+		write "<tr><td>",iKnowMetafield,"</td>"
+		write "<td>"
+		write metavalue
+		Set Score=$Get(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue))
+		If $ListValid(Score),$LL(Score)>0 {
+			If $List(Score,1)>0 {
+				Write " (score : "_$List(Score,1)_", sets : "
+				For iScoreSet=1:1:$LL($List(Score,2)) {
+					Write $List($List(Score,2),iScoreSet)
+					If iScoreSet'=$LL($List(Score,2)) w ", "
+				}
+				Write ")"
+			}
+		} else {
+			If Score'="" Write " (score : "_Score_")"
+		}
+		
+		Write "&nbsp;&nbsp;<a href='iKnowSetAnalysisDetail.csp?action=allsources&set=",$$$OUT(Set),"&metavalue=",metavalue,"' >[show all sources]</a>&nbsp;&nbsp;"
+
+		If $Data(^iKnow.SetAnalysis(ProjectId, Set, "P", metavalue)) {
+			Write "<a href='iKnowSetAnalysisDetail.csp?action=remove&set=",$$$OUT(Set),"&metavalue=",metavalue,"' >[remove from set]</a>"
+			Set MemberType="P"
+		} else {
+			Write "<a href='iKnowSetAnalysisDetail.csp?action=restore&set=",$$$OUT(Set),"&metavalue=",metavalue,"' >[restore to set]</a>"
+			Set MemberType="PXX"  ;to do : do not display PX !
+		}
+
+		write "</td></tr>"
+
+		write "<tr><th>Source</th><th>Sentence</th></tr>"
+		Kill Sources
+		Set srcId="" For {
+			Set srcId=$Order(^iKnow.SetAnalysis(ProjectId, Set, MemberType, metavalue, srcId)) If srcId="" Quit
+			Set Sources(srcId)=""
+		}		
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		If AllSources {
+			&sql(Select iKnowMetaField Into :MetadataField From iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+			Set objFilter=##class(%iKnow.Filters.SimpleMetadataFilter).%New(DomainId,MetadataField,"=",metavalue)
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.resultSources,DomainId,0,,objFilter)
+			Set iSrc="" For {
+				Set iSrc=$Order(resultSources(iSrc)) If iSrc="" Quit
+				Set srcId=$List(resultSources(iSrc),1)
+				If '$Data(Sources(srcId)) Set Sources(srcId)=1
+			} 
+		}
+		Set srcId="" For {
+			Set srcId=$Order(Sources(srcId)) If srcId="" Quit
+			Set sentId="" For iFirst=1:1 {
+  				Set sentId=$Order(^iKnow.SetAnalysis(ProjectId, Set, MemberType, metavalue, srcId, sentId)) If sentId="" Quit
+				Write !,"<tr valign='top'><td>"
+				If iFirst=1 Write srcId_" <a id='sourceText"_srcId_"' href=""javascript:toggle('sourceText"_srcId_"','sourceBlock"_srcId_"','",srcId,"');"">show</a>"
+				Write "</td><td>",!
+				Set terms=..GetAllTerms(ProjectId, Set)
+				Do ..OutputSentence(DomainId, sentId, .terms, TermType)
+				Write "<a href='iKnowSetAnalysisDetail.csp?action=removesent&set=",$$$OUT(Set),"&src="_srcId_"&sent="_sentId,"&metavalue=",metavalue,"'>[-]</a>"
+				Write "</td></tr>",!
+			}
+			
+			If Sources(srcId)=1 {  ;source without evidence sentences
+				Write !,"<tr valign='top'><td>"
+				Write srcId_" <a id='sourceText"_srcId_"' href=""javascript:toggle('sourceText"_srcId_"','sourceBlock"_srcId_"','",srcId,"');"">show</a>"
+				Write "</td></tr>",!
+			}
+
+			//Do ##class(%iKnow.Queries.SourceAPI).GetSummary(.result, DomainId, srcId, 9999)
+			
+			Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.resultSent, DomainId, srcId, 0)
+			If AllSources {  ;Sources(srcId)=1 {
+				write "<tr><td colspan=2><div id='sourceBlock",srcId,"' style='display: block'>"
+			} else {
+				write "<tr><td colspan=2><div id='sourceBlock",srcId,"' style='display: none'>"
+			}
+			Write "<table id='gradient-style'>"
+			write "<tr><th>Source ",srcId," (",##class(%iKnow.Queries.SourceAPI).GetExternalId(DomainId, srcId),")</th></tr>"
+			write !,"<tr><td>"
+			Set iSent="" For {
+				Set iSent=$Order(resultSent(iSent)) If iSent="" Quit
+				Do ..OutputSentence(DomainId, $List(resultSent(iSent),1), .terms, TermType)
+			}
+
+
+			;Set iCount="" For {
+			;	set iCount=$Order(result(iCount), 1, data) If iCount="" Quit
+			;	write $list(data,2),"<br>"
+			;}
+			write "</td></tr>"
+			Write "</table></div></td></tr>"
+		
+		}
+		Write "</table>"
+		Set srcId="" For {
+			Set srcId=$order(^iKnow.SetAnalysis(DomainId, Set, "P", metavalue, srcId)) If srcId="" Quit
+		}
+]]></Implementation>
+</Method>
+
+<Method name="GetSentence">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[domainId,sentId,&terms="",termType="ENTITY",iKnowHighlighting:%Boolean=0,overrideHighlight:%String=""]]></FormalSpec>
+<Implementation><![CDATA[
+	#dim DomainExpertHighlight as %Boolean
+	#dim domainName, package, schema, QuotedTerms, Sentence, tHighlight as %String
+	#dim sc as %Status
+	#dim iTerm as %Integer
+	Try {
+		Set sc = ##class(%DeepSee.DomainExpert.utils.DomainUtils).domainById(domainId, .domainName, .package, .schema)
+   		Set DomainExpertHighlight=$Select(iKnowHighlighting=1:0,+sc=0:0,schema="":0,1:1)
+	} Catch {
+		Set DomainExpertHighlight=0
+	}
+	If termType="" Set termType="ENTITY"
+	
+	If DomainExpertHighlight {
+		Set QuotedTerms=""
+		For iTerm=1:1:$ListLength(terms) {
+			Set QuotedTerms=QuotedTerms_$lb(##class(%iKnow.Queries.EntityAPI).GetValue(domainId,$List(terms,iTerm)))
+		}
+		Do ##class(%DeepSee.DomainExpert.utils.HtmlUtils).sentenceHTML(schema_".",sentId,QuotedTerms,.Sentence)
+	} else {
+		Set Sentence=""
+		for iTerm=1:1:$ll(terms) {
+			Set tHighlight(termType,$List(terms,iTerm))=$Select($Data(overrideHighlight("term")):overrideHighlight("term"),1:"<b>")
+		}
+		Set tHighlight("ATTRIBUTE",$$$IKATTNEGATION)="<span class='all_negation'>"
+		Set tHighlight("ATTRIBUTEWORDS",$$$IKATTNEGATION)=$Select($Data(overrideHighlight("negation")):overrideHighlight("negation"),1:"<u>")
+		Set Sentence = ##class(%iKnow.Queries.SentenceAPI).GetHighlighted(domainId, sentId, .tHighlight)
+	}
+	Quit Sentence
+]]></Implementation>
+</Method>
+
+<Method name="OutputSentence">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[domainId,sentId,&terms,termType="ENTITY"]]></FormalSpec>
+<Implementation><![CDATA[	Write ..GetSentence(domainId, sentId, .terms, termType)
+]]></Implementation>
+</Method>
+
+<Method name="GetAllTerms">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,recursive</FormalSpec>
+<Implementation><![CDATA[
+	if '$data(recursive) kill ^||tempiKnowSetAnalysis
+	Set terms=""
+	Set sTerm="" For {
+		Set sTerm=$Order(^iKnow.SetAnalysis(ProjectId, Set, "E", sTerm)) Quit:sTerm=""
+		Set terms=terms_$lb(^(sTerm))
+	}
+	Set dep="" For  {
+		Set dep=$Order(^iKnow.SetAnalysis(ProjectId, Set, "DEP", dep)) Quit:dep=""
+		If '$Data(^||tempiKnowSetAnalysis(dep)) {
+			Set ^||tempiKnowSetAnalysis(dep)=""
+			Set terms=terms_..GetAllTerms(ProjectId, dep, 1)
+		}
+	}
+	Quit terms
+]]></Implementation>
+</Method>
+
+<Method name="ImportSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectName:%String,SetName:%String,PluginName:%String,Input:%String,InputSet:%String="",DeepSeeEnabled:%Boolean=1,RestEnabled:%Boolean=1,SelectMode:%String=1,Inclusion:%String="",Exclusion:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	&sql(Select ID Into :ProjectId From iKnow_SetAnalysis.Projects Where Name = :ProjectName)
+	If SQLCODE'=0 Quit $$$ERROR($$$GeneralError, "Project does not exist")
+	Quit ..ImportSetByProjectId(ProjectId, SetName, PluginName, Input, InputSet, DeepSeeEnabled, RestEnabled, SelectMode, Inclusion, Exclusion)
+]]></Implementation>
+</Method>
+
+<Method name="ImportSetByProjectId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,SetName:%String,PluginName:%String,Input:%String,InputSet:%String="",DeepSeeEnabled:%Boolean=1,RestEnabled:%Boolean=1,SelectMode:%String=1,Inclusion:%String="",Exclusion:%String="",MaxSelect:%Integer=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set sc = $$$OK
+	&sql(Select iKnowMetafield into :MetadataField From iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+	Set Filter=""
+	Set IsMerge = 0
+	Set BlacklistMembers=""
+	
+	If PluginName="" {
+		Set Formula = Input
+		Set Error = ..Formula(ProjectId, SetName, Formula, DeepSeeEnabled, RestEnabled)
+	    If Error = "" {
+			Do ..Log("Set formula "_SetName_" saved.")
+	    } else {
+		    Set ErrorStr = "Error in formula "_SetName_" : "_Error
+			Do ..Log(ErrorStr)
+			Set sc = $$$ERROR($$$GeneralError, ErrorStr)
+	    }
+	} else {
+		;first execute the plugin
+		&sql(Select ID Into :PluginId From iKnow.SetAnalysisPlugin Where Name = :PluginName)
+		If SQLCODE'=0 {
+			Set ErrorStr = "Set "_SetName_" : plugin "_PluginName_" does not exist."
+			Do ..Log(ErrorStr)
+			Set sc = $$$ERROR($$$GeneralError, ErrorStr)
+		} else {
+			Set Definition=$ListBuild(0,PluginId,Input,InputSet)
+			Set ResultPtr=""
+			Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId, ProjectId, Input, "", InputSet, .Filter, , .ResultPtr, 0)
+			Kill ResultEnt
+			Set ResultEnt=""
+			Kill Entities
+			Set Sort=""
+			For {
+				Set Sort=$Order(^iKnow.SetAnalysisTemp(ResultPtr,"S",Sort)) If Sort="" Quit
+				Set Id=""
+				For {
+					Set Id=$Order(^iKnow.SetAnalysisTemp(ResultPtr,"S",Sort, Id)) If Id="" Quit
+					;TODO : use SelectMode and Inclusion, Exclusion
+					Set InSet = 1
+					If SelectMode = 0 Set InSet = 0
+					Set Entity=""
+					If InSet=0,Inclusion'="" {
+						;check pattern, regex
+						Set Entity=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,ResultPtr,Id)
+						If ..SelectPattern(Entity, Inclusion) Set InSet=1
+					}
+					If InSet=1,Exclusion'="" {
+						;check pattern, regex
+						If Entity="" Set Entity=##class(iKnow.SetAnalysisPlugin).GetValue(PluginId,ProjectId,ResultPtr,Id)
+						If ..SelectPattern(Entity, Exclusion) Set InSet=0
+					}
+					If InSet {
+						If MaxSelect'="",$Get(Entities)'<MaxSelect Quit
+						Set Entities($I(Entities))=Id
+					}
+				}
+			}
+		;then, save the set
+			Do ..SaveSet(ProjectId, MetadataField, SetName, Definition, .Entities, IsMerge, .Filter, ResultPtr, .BlacklistMembers, DeepSeeEnabled, RestEnabled)
+			Do ..Log("Set "_SetName_" saved.")
+		}
+	}
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="ImportFile">
+<Description>
+import a defintion file to generate sets. Will be jobbed.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,File:%String</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	Open File:("R"):0 Else  Do ..Log("Could not open file "_File_" on server.") Quit 0
+	Set Success = 1
+	Try {
+		Use File
+		For iLine=1:1 {
+			Use File
+			Read Line
+			Set PluginName     = $Piece(Line,$C(9),1)  ;Name of Plugin to be used
+			Set Concept        = $Piece(Line,$C(9),2)  ;Based on this input
+			Set InputSet       = $Piece(Line,$C(9),3)  ;Based on input of this set (or nothing)
+			Set SaveSet        = $Piece(Line,$C(9),4)  ;Name of Set to be saved
+			Set DeepSeeEnabled = $Piece(Line,$C(9),5)  ;1 = visible in DeepSee, 0 = not visible
+			Set RestEnabled    = $Piece(Line,$C(9),6)  ;1 = visible in REST), 0 = not visible
+			Set SelectMode     = $Piece(Line,$C(9),7)  ;1 = select all, or 0 = select none
+			Set Inclusion      = $Piece(Line,$C(9),8)  ;criteria to be selected
+			Set Exclusion      = $Piece(Line,$C(9),9)  ;criteria to be not selected
+			Do ..ImportSetByProjectId(ProjectId, SaveSet, PluginName, Concept, InputSet, DeepSeeEnabled, RestEnabled, SelectMode, Inclusion, Exclusion)
+
+		}
+		Close File
+	} Catch {
+		If $ZE'["ENDOFFILE" {
+			Do ..Log("Error "_$ZE_" at line "_iLine)
+			Set Success = 0
+		}
+		Close File
+	}
+	Do ..Log("Import of file "_File_" finished "_$Select(Success:" successfully.",1:" with errors"))
+	Quit Success
+]]></Implementation>
+</Method>
+
+<Method name="SelectPattern">
+<Description>
+test if a given string meets the criteria or not
+Criteria can be any number of patterns, regex, ... (to be defined as we go!)
+e.g. abc*, *abc, *abc*, .E1.2N1"/"1.2N1"/"2.4N.E</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Entity:%String,Criteria:%String</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	Try {
+		Set Ok=$Match(Entity,Criteria)
+	} Catch {
+		Do ..Log("Error in method SelectPattern : "_$ZE)
+		Set Ok=0
+	}
+	Quit Ok
+]]></Implementation>
+</Method>
+
+<Method name="Extract">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,SetName,Formula:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set Set=$Piece(Formula," ",2)
+	Set RuleSet=$Piece(Formula," ",3)
+	Do ##class(iKnow.SetAnalysisExtract).Extract(ProjectId, Set, SetName, RuleSet)
+]]></Implementation>
+</Method>
+
+<Method name="Score">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,SetName,Formula:%String,&OnlyDependencies:%String=0]]></FormalSpec>
+<Implementation><![CDATA[
+	#Dim ScoreSet,Set,id,ScoreData,thisScore,thisScoreSet,score as %String
+	#Dim iSet as %Integer
+
+	;in Set all id's from sets in Formula, with score
+	Set Formula=$E(Formula,7,*)
+	Set ScoreSet=0
+	Set iSet="" For iSet=1:1:$L(Formula,",") {
+		Set Set=$Piece(Formula,",",iSet)
+		If Set'="",$Data(^iKnow.SetAnalysis(ProjectId,Set)) {
+			;is known Set
+			Set ScoreSet=ScoreSet+1
+			;get all id's from set in ScoreSet
+			Merge ScoreSet("U")=^iKnow.SetAnalysis(ProjectId,Set, "P")
+			Set ScoreSet("S",Set)=""
+		}
+	}
+	
+	;this is for callers who are only interested to know which are the dependencies of the formula
+	If OnlyDependencies=1 Merge OnlyDependencies=ScoreSet("S") Quit
+	
+	;for all Sets in ScoreSet, calc sore
+	Set id="" For  {
+		Set id=$Order(ScoreSet("U",id)) if id="" Quit
+		Set ScoreSet("U",id)=0
+		Set Set="" For  {
+			Set Set=$Order(ScoreSet("S",Set)) If Set="" Quit
+			If $Data(^iKnow.SetAnalysis(ProjectId,Set,"P",id)) {
+				Set ScoreData=$Get(ScoreSet("U",id))
+				Set thisScore=$Select(ScoreData?.N:0,1:$List(ScoreData,1))
+				Set thisScoreSet=$Select(ScoreData?.N:"",1:$List(ScoreData,2))
+				;Set ScoreSet("U",id)=$Get(ScoreSet("U",id))+1
+				Set thisScore=thisScore+1
+				Set thisScoreSet=thisScoreSet_$lb(Set)
+				Set ScoreSet("U",id)=$ListBuild(thisScore,thisScoreSet)
+			}
+		}
+	}
+	
+
+	Kill ^iKnow.SetAnalysis(ProjectId,SetName)
+	Set ^iKnow.SetAnalysis(ProjectId,SetName, "D", 1)=$ListBuild(2,,"Score "_Formula)
+	Merge ^iKnow.SetAnalysis(ProjectId,SetName,"P")=ScoreSet("U")
+	Merge ^iKnow.SetAnalysis(ProjectId,SetName,"DEP")=ScoreSet("S")  ;dependent set's
+	Kill ^iKnow.SetAnalysis(ProjectId,SetName,"DEP","%all")  ;never include the %all Set
+	Set id="" For {
+		Set id=$order(^iKnow.SetAnalysis(ProjectId,SetName,"P",id),1,score) Quit:id=""
+		set ^iKnow.SetAnalysis(ProjectId,SetName,"PS", $S(score?.N:+score,1:$list(score,1)), id)=""
+	}
+	Do ##class(iKnow.SetAnalysis.Sets).SaveSet(ProjectId, SetName)
+]]></Implementation>
+</Method>
+
+<Method name="Formula">
+<Description>
+Formula : change filter in set of patients</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,Set,Formula:%String,deepseeEnabled:%Boolean,restEnabled:%Boolean,executedFromTop:%Boolean=0,SetDescription:%String="",&OnlyDependencies:%String=0]]></FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#Dim Prev,Error,First,Next,FirstE,NextE,Char, Oper, pubProjectId, pubSetName as %String
+	#Dim Negate, Level,iForm,thisProjectId as %Integer
+	#Dim form as %String
+	If $E($ZCVT(Formula,"U"),1,6)="SCORE " Do ..Score(ProjectId, Set, Formula, .OnlyDependencies) Quit ""
+	If $E($ZCVT(Formula,"U"),1,8)="EXTRACT " Do ..Extract(ProjectId, Set, Formula) Quit ""
+	Set Formula=Formula_" "  ;so we will process last set in the loop @ ' '
+	Set Prev="",Error="",Negate=0,Level=1,(First,Next)=""
+	Set (FirstE,NextE)=""
+	For iForm=1:1:$Length(Formula) {
+		Set Char=$E(Formula,iForm)
+		If (Char=" ")!(Char="(")!(Char=")"),Prev'="" {
+			Set thisProjectId=ProjectId
+			Set fullSetname=Prev
+			If ('$Data(^iKnow.SetAnalysis(thisProjectId,Prev)))&(Prev'="%all"),Prev["." {
+				;check if Prev is PublicProject.Set -> get Id into thisProjectId, Prev=Set
+				;TODO : check indexes on sql !!!
+				Set setName=$Piece(Prev,".",2,*)
+				Set projectName=$Piece(Prev,".",1)
+				If ##class(iKnow.SetAnalysisPlugin).GetPublicProjectSet(Prev, .pubProjectId, .pubSetName) {
+					Set thisProjectId = pubProjectId
+					Set Prev = pubSetName
+				}
+			}
+
+			If ($Data(^iKnow.SetAnalysis(thisProjectId,Prev)))!(Prev="%all") {
+				Set form(fullSetname)=Level
+				If First="" {
+					Do ..GetSet(thisProjectId, .First, Prev, "P")
+					Do ..GetSet(thisProjectId, .FirstE, Prev, "E")
+					If Negate {
+						Do ..NotSet(.First)
+						Do ..NotSet(.FirstE)
+					}
+				} else {
+					Do ..GetSet(thisProjectId, .Next, Prev, "P")
+					Do ..GetSet(thisProjectId, .NextE, Prev, "E")
+					If Negate {
+						Do ..NotSet(.Next)
+						Do ..NotSet(.NextE)
+					}
+					If Oper="AND" {
+						Do ..AndSet(.First, .First, .Next)
+						Do ..AndSet(.FirstE, .FirstE, .NextE)
+					} elseif Oper = "ANDNOT" {
+						Do ..AndNotSet(.First, .First, .Next)
+						Do ..AndNotSet(.FirstE, .FirstE, .NextE)
+					} elseif Oper = "ANDNOTSOURCE" {
+						Do ..AndNotSourceSet(.First, .First, .Next)
+						Do ..AndNotSourceSet(.FirstE, .FirstE, .NextE)
+					} elseif Oper = "ANDNOTSENTENCE" {
+						Do ..AndNotSentenceSet(.First, .First, .Next)
+						Do ..AndNotSentenceSet(.FirstE, .FirstE, .NextE)
+					} else {
+						Do ..OrSet(.First, .First, .Next)
+						Do ..OrSet(.FirstE, .FirstE, .NextE)
+					}
+					Set Oper=""
+					Set Next=""
+				}
+					
+				Set Prev="",Negate=0 ;todo : not (...)
+			} else {
+				Set Error = "'"_Prev_"' is not a Set"
+				Quit
+			}
+		}
+		If (Char="(") ! (Char=")") {
+			;process ( )
+			If Char = "(" Set Level=Level+1
+			If Char = ")" Set Level=Level-1
+			Set Error= "Brackets are not (yet) allowed in this version"
+			Quit
+		} elseif Char=" " {
+			;is Prev defined as set
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+2),"U")=" OR " {
+			Set iForm=iForm+1
+			Set Oper="OR"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+3),"U")=" AND " {
+			Set iForm=iForm+2
+			Set Oper="AND"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+6),"U")=" ANDNOT " {
+			Set iForm=iForm+5
+			Set Oper="ANDNOT"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+12),"U")=" ANDNOTSOURCE " {
+			Set iForm=iForm+11
+			Set Oper="ANDNOTSOURCE"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+14),"U")=" ANDNOTSENTENCE " {
+			Set iForm=iForm+13
+			Set Oper="ANDNOTSENTENCE"
+		} elseif $ZCVT($E(Formula,iForm-1,iForm+3),"U")=" NOT " {
+			Set iForm=iForm+2
+			Set Negate=1
+		} else {
+			Set Prev=Prev_Char
+		}
+	}
+	
+	If OnlyDependencies=1 Merge OnlyDependencies=form Quit ""
+	Kill ^iKnow.SetAnalysis(ProjectId,Set)
+	Set ^iKnow.SetAnalysis(ProjectId,Set, "D", 1)=$ListBuild(1,,Formula,,deepseeEnabled,restEnabled,,SetDescription)
+	If Error="" {
+		Merge ^iKnow.SetAnalysis(ProjectId,Set,"P")=First
+		Merge ^iKnow.SetAnalysis(ProjectId,Set,"E")=FirstE
+		Set ^iKnow.SetAnalysis(ProjectId,Set,"E")=""
+		Merge ^iKnow.SetAnalysis(ProjectId,Set,"DEP")=form  ;dependent set's
+		Kill ^iKnow.SetAnalysis(ProjectId,Set,"DEP","%all")  ;never include the %all Set
+		Do ##class(iKnow.SetAnalysis.Sets).SaveSet(ProjectId, Set)
+		//If executed from top (UI), need to clear the recalc stack to prevent multiple recalc of dependent formulas (since is recursive)
+		Do ..CalcDependent(ProjectId, Set, executedFromTop)
+	} else {
+		Do ..Log("Error in Formula ("_Formula_") : "_Error)
+	}
+	Quit Error
+]]></Implementation>
+</Method>
+
+<Method name="GetSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,InSet:%String,FromSet:%String,Type:%String</FormalSpec>
+<Implementation><![CDATA[
+	Kill InSet
+	Set InSet=1
+	If FromSet = "%all" {
+		If Type="P" {
+			Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+			&sql(Select iKnowMetaField Into :MetadataField From iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+			Do ##class(%iKnow.Queries.MetadataAPI).GetFieldValues(.result, DomainId, MetadataField, 0)
+			Set iCount=""
+			For {
+				Set iCount=$Order(result(iCount)) Quit:iCount=""
+				If $list(result(iCount),1)'="" Set InSet($list(result(iCount),1))=""
+			}
+		} else {
+			;Type = "E" : too much to handle !!
+		}
+	} else {
+		Merge InSet = ^iKnow.SetAnalysis(ProjectId,FromSet, Type)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="NotSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Set:%String</FormalSpec>
+<Implementation><![CDATA[	//not sure what a NOT should do !
+]]></Implementation>
+</Method>
+
+<Method name="AndSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InSet:%String,Set1,Set2</FormalSpec>
+<Implementation><![CDATA[
+	Kill TempSet
+	Set TempSet=1
+
+	Set iSet="" For  {
+		Set iSet=$Order(Set1(iSet)) If iSet="" Quit
+		If $Data(Set2(iSet)) {
+			Merge TempSet(iSet)=Set1(iSet)
+			Merge TempSet(iSet)=Set2(iSet)
+		}
+	}
+
+	Kill InSet
+	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="AndNotSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InSet:%String,Set1,Set2</FormalSpec>
+<Implementation><![CDATA[
+	Kill TempSet
+	Set TempSet=1
+
+	Set iSet="" For  {
+		Set iSet=$Order(Set1(iSet)) If iSet="" Quit
+		If '$Data(Set2(iSet)) {
+			Merge TempSet(iSet)=Set1(iSet)
+		}
+	}
+
+	Kill InSet
+	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="AndNotSourceSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InSet:%String,Set1,Set2</FormalSpec>
+<Implementation><![CDATA[
+	Kill TempSet
+	Set TempSet=1
+
+	Set iSet="" For  {
+		Set iSet=$Order(Set1(iSet)) If iSet="" Quit
+		If '$Data(Set2(iSet)) {
+			Merge TempSet(iSet)=Set1(iSet)
+		} else {
+			Set src=""
+			For {
+				Set src=$order(Set1(iSet,src)) IF src="" Quit
+				If '$Data(Set2(iSet,src)) {
+					Merge TempSet(iSet,src)=Set1(iSet,src)
+					Merge TempSet(iSet)=Set1(iSet)
+				}
+			}
+		}
+	}
+
+	Kill InSet
+	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="AndNotSentenceSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InSet:%String,Set1,Set2</FormalSpec>
+<Implementation><![CDATA[
+	Kill TempSet
+	Set TempSet=1
+
+	Set iSet="" For  {
+		Set iSet=$Order(Set1(iSet)) If iSet="" Quit
+		If '$Data(Set2(iSet)) {
+			Merge TempSet(iSet)=Set1(iSet)
+		} else {
+			Set src=""
+			For {
+				Set src=$order(Set1(iSet,src)) IF src="" Quit
+				If '$Data(Set2(iSet,src)) {
+					Merge TempSet(iSet,src)=Set1(iSet,src)
+					If $Data(Set1(iSet))#2 Set TempSet(iSet)=Set1(iSet)
+				} else {
+					Set sent=""
+					For {
+						Set sent=$order(Set1(iSet,src,sent)) If sent="" Quit
+						If '$Data(Set2(iSet,src,sent)) {
+							Merge TempSet(iSet,src,sent)=Set1(iSet,src,sent)
+							If $Data(Set1(iSet,src))#2 Set TempSet(iSet,src)=Set1(iSet,src)
+							If $Data(Set1(iSet))#2 Set TempSet(iSet)=Set1(iSet)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	Kill InSet
+	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="OrSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InSet:%String,Set1,Set2</FormalSpec>
+<Implementation><![CDATA[
+
+	Kill TempSet
+	Set TempSet=1
+
+	Merge TempSet = Set1
+	Merge TempSet = Set2
+
+	Kill InSet
+	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="GetItems">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,FilterItems:%String="",FilterSets:%String="",Fields:%String,MaxItems:%Integer,Result</FormalSpec>
+<Implementation><![CDATA[
+	Kill Result,^||iKnow.SetAnalysisSort
+	Set ItemCount=0
+	If $Get(ProjectId)="" Set ProjectId=$Order(^iKnow.SetAnalysis(""))
+	If ProjectId="" Quit
+	Set Set="" For  {
+		Set Set=$Order(^iKnow.SetAnalysis(ProjectId,Set)) If Set="" Quit
+		If FilterSets'="",(","_FilterSets_",")'[(","_Set_",") Continue
+		If FilterItems'="" {
+			For iItem=1:1:$Length(FilterItems,",") {
+					Set Item=$Piece(FilterItems,",",iItem)
+					If Item'="",$Data(^iKnow.SetAnalysis(ProjectId,Set,"P",Item)) Do ..AddItem(ProjectId,Set,Item)
+			}
+		} else {
+			Set Item="" For ItemCount=1:1:MaxItems {
+					Set Item=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Item)) If Item="" Quit
+					Do ..AddItem(ProjectId,Set,Item)
+			}
+		}
+	}
+
+	;TODO : why iKnow function, calc domainid
+	For iField=1:1:$Length(Fields,",") {
+		Set Field=$Piece(Fields,",",iField)
+		Set Field(iField)=$ListBuild(Field,##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, Field, .sc))
+	}
+	Set Item="" For iCount=1:1:MaxItems {
+		Set Item=$Order(^||iKnow.SetAnalysisSort(Item)) If Item="" Quit
+		Set Set="",Sets="" For  {
+			Set Set=$Order(^||iKnow.SetAnalysisSort(Item,"S",Set)) If Set="" Quit
+			Set Sets=Sets_$ListBuild(Set)
+		}
+		Set ResultData=$ListBuild(Item,Sets)
+		Set SrcId=$Get(^||iKnow.SetAnalysisSort(Item,"SRC"))
+		If SrcId'="" {
+			For iField=1:1:$Length(Fields,",") {
+				Set FieldId=$List(Field(iField),2)
+				Set ResultData=ResultData_$ListBuild($S(FieldId="":"",1:##class(%iKnow.Queries.MetadataAPI).GetValueById(DomainId, FieldId, SrcId)))
+			}
+		} else {
+			For iField=1:1:$Length(Fields,",") { Set ResultData=ResultData_$ListBuild("") }
+		}
+		Set Result($I(Result))=ResultData
+	}
+]]></Implementation>
+</Method>
+
+<Method name="AddItem">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,Item</FormalSpec>
+<Implementation><![CDATA[
+	If '$Data(^||iKnow.SetAnalysisSort(Item,"SRC")) {
+		Set Src=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Item, ""))
+		If Src'="" Set ^||iKnow.SetAnalysisSort(Item,"SRC")=Src
+	}
+	Set ^||iKnow.SetAnalysisSort(Item,"S",Set)=""
+]]></Implementation>
+</Method>
+
+<Method name="DisplayToMetaValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DisplayValue:%String,domainId:%String,fieldName:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(domainId, fieldName, .sc)
+	Set dataType=$listget($Get(^ISC.IK.Mdt.FieldId(domainId, fieldId)),3)
+	If dataType="DATE",DisplayValue?2N1"/"2N1"/"4N {
+		Set MetaValue=$ZDH(DisplayValue,4,,,,,,,"")
+	} else {
+		Set MetaValue = DisplayValue
+	}
+	Quit MetaValue
+]]></Implementation>
+</Method>
+
+<Method name="MetaValueToDisplay">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>MetaValue:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	;todo : only if date
+	If MetaValue?1.6N {
+		Set Display=$ZD(MetaValue,4,,,,,,,"")
+	} else {
+		Set Display = MetaValue
+	}
+	Quit Display
+]]></Implementation>
+</Method>
+
+<Method name="DateToStr">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Hor:%String</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If Hor="" Quit ""
+	Quit $ZDate($Piece(Hor,",",1),4)_" - "_$ZTime($Piece(Hor,",",2))
+]]></Implementation>
+</Method>
+
+<Method name="Debug">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>On:%Boolean</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	If $Data(On) Set ^iKnow.SetAnalysisDebug = On
+	Quit +$Get(^iKnow.SetAnalysisDebug)
+]]></Implementation>
+</Method>
+
+<Method name="DeleteAll">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	Kill ^iKnow.SetA4ECA.SetKeyValue7D0FD
+	Kill ^iKnow.SetA4ECA.SetKeyValue7D0FI
+	Kill ^iKnow.SetAnal4ECA.SetKeyValuesD
+	Kill ^iKnow.SetAnal4ECA.SetKeyValuesI
+	Kill ^iKnow.SetAnalysis
+	Kill ^iKnow.SetAnalysis.SetMembersD
+	Kill ^iKnow.SetAnalysis.SetMembersI
+	Kill ^iKnow.SetAnalysis.SetsD
+	Kill ^iKnow.SetAnalysis.SetsI
+	Kill ^iKnow.SetAnalysisLog
+	Kill ^iKnow.SetAnalysisPluginD
+	Kill ^iKnow.SetAnalysisPluginI
+	Kill ^iKnow.SetAnalysisTemp
+]]></Implementation>
+</Method>
+
+<Method name="InitSecurity">
+<Description>
+Script to enable security for SetAnalysis</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>WebApp:%String="/csp/setanalysis",DBResource:%String="%DB_%DEFAULT"</FormalSpec>
+<Implementation><![CDATA[
+	//needs to be executed in %SYS !
+	Set currentNS = $Namespace
+	ZNspace "%SYS"
+	Set sc = ##class(Security.Resources).Create("SetAnalysis_CreateProject","SetAnalysis Resource to enable creating Projects",0)
+	If $$$ISERR(sc) w "1:",! Do $SYSTEM.Status.DisplayError(sc)
+	Set sc = ##class(Security.Resources).Create("SetAnalysis_ProjectDefault","Default resource for SetAnalysis projects",0)
+	If $$$ISERR(sc) w "2:",! Do $SYSTEM.Status.DisplayError(sc)
+
+	set sc = ##class(Security.Roles).Create("SetAnalysis_App","Resources for the SetAnalysis WebApplication","%Service_CSP:U,"_DBResource_":RW,%DB_CACHESYS:RW,%Admin_Secure:U")  ;CACHESYS and Secure only needed if you want SetAnalysis to create additional resources+roles automatically
+	If $$$ISERR(sc) w "3:",! Do $SYSTEM.Status.DisplayError(sc)
+	For Privilege="a","i","u","d","s","r","e" {
+		Do ..InitSecuritySQL(Privilege,"1,iKnow.SetAnalysisPlugin",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.Batches",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.Members",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.Patterns",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.Projects",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.SetFilters",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.SetKeyValueMembers",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.SetKeyValues",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.SetMemberSourceSentences",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.SetMemberSources",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.SetMembers",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.Sets",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.XKeyValues",currentNS)
+		Do ..InitSecuritySQL(Privilege,"1,iKnow_SetAnalysis.XRules",currentNS)
+	}
+	;give 'WebApp' the SetAnalysis_App role
+	Set objWebApp=##class(Security.Applications).%OpenId(WebApp)
+	If objWebApp="" {
+		Write !,"Could not open "_WebApp_" to give application security role"
+	} else {
+		Set Done=0
+		For iRole=1:1:objWebApp.MatchRoles.Count() {
+			If objWebApp.MatchRoles.GetAt(iRole)["SetAnalysis_App" Set Done=1 Quit
+		}
+		If Done {
+			Write !,"WebApp "_WebApp_" already had matching role SetAnalysis_App"
+		} else {
+			If objWebApp.MatchRoles.Count()=0 {  //this is a list, but for some unknown reason, all strings are in the first element of the list !!!
+				Do objWebApp.MatchRoles.Insert(":SetAnalysis_App")
+			} else {
+				Do objWebApp.MatchRoles.SetAt(objWebApp.MatchRoles.GetAt(1)_":SetAnalysis_App",1)
+			}
+			Set sc = objWebApp.%Save()
+			If $$$ISERR(sc) Do $SYSTEM.Status.DisplayError(sc)
+		}
+	}
+	set sc = ##class(Security.Roles).Create("SetAnalysis_Manager","SetAnalysis Manager role that can manage a project","SetAnalysis_CreateProject:U,%Service_CSP:U")
+	If $$$ISERR(sc) Do $SYSTEM.Status.DisplayError(sc)
+	set sc = ##class(Security.Roles).Create("SetAnalysis_User","SetAnalysis role for users that should be enabled to manage projects with default resource","SetAnalysis_ProjectDefault:RW,%Service_CSP:U")
+	If $$$ISERR(sc) Do $SYSTEM.Status.DisplayError(sc)
+	Znspace currentNS
+]]></Implementation>
+</Method>
+
+<Method name="InitSecuritySQL">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Priv,Object,Namespace</FormalSpec>
+<Implementation><![CDATA[
+	If ##class(Security.SQLPrivileges).%ExistsId(Namespace_"||"_Object_"||"_Priv_"||SetAnalysis_App||_SYSTEM") Quit
+	set objSQL = ##class(Security.SQLPrivileges).%New()
+	Set objSQL.Grantable=0
+	Set objSQL.Grantee="SetAnalysis_App"
+	Set objSQL.Grantor="_SYSTEM"
+	Set objSQL.Namespace=Namespace
+	Set objSQL.Privilege=Priv    ;"a" ;,i,u,d,s,r,e") [ Required ];
+	Set objSQL.SQLObject=Object  ;"1,iKnow_SetAnalysis.XRules"
+	Set sc = objSQL.%Save()
+	If $$$ISERR(sc) {
+		Do $SYSTEM.Status.DecomposeStatus(sc,.err)
+		If err(1,"code")
+		Write "Error in saving "_Object_", privilege "_Priv,":",!
+		Write err(1),!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="AddSecurity">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Resource:%String</FormalSpec>
+<Implementation><![CDATA[
+	;todo : add Resource
+	;todo : add Role for Resource
+	Try {
+	Set currentNS = $Namespace
+	ZNspace "%SYS"
+	Set sc = ##class(Security.Resources).Create("SetAnalysis_Project"_Resource,"Resource for SetAnalysis project",0)
+	If $$$ISERR(sc) Do $SYSTEM.Status.DisplayError(sc)
+	set sc = ##class(Security.Roles).Create("SetAnalysis_Project"_Resource,"Role for the SetAnalysis project resource","SetAnalysis_Project"_Resource_":RW")
+	If $$$ISERR(sc) Do $SYSTEM.Status.DisplayError(sc)
+	zn currentNS
+	} catch {
+		set ^dw=$ZE
+	}
+]]></Implementation>
+</Method>
+
+<Method name="FieldValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Value,Datatype</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If Value="" Quit ""
+	Set FieldValue=Value
+	If Datatype="DATE" {
+		Set FieldValue=$ZDate(Value, 4,,,,,,,"")
+		If +$P(Value,",",2)'=0 Set FieldValue=FieldValue_" - "_$ZTime($P(Value,",",2))
+	}
+	Quit FieldValue
+]]></Implementation>
+</Method>
+</Class>
+</Export>

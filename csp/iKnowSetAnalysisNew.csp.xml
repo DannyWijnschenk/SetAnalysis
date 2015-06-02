@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisNew.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+
+<title>SetAnalysis : New Concepts </title>
+
+<link rel="stylesheet" type="text/css" href="iKnowSetAnalysis.css" />
+
+<script language=javascript>
+  function SetOnChange() {
+	document.newForm.submit();
+  }	
+</script>
+
+</head>
+
+<body>
+<script language="cache" runat="server">
+  #Include %IKPublic
+  Set action=$get(%request.Data("action",1))
+  If $Data(%request.Data("domain",1)) {
+	  Set domainName=%request.Data("domain",1)
+	  Do %session.Set("domainName",domainName)
+  } else {
+  	  Set domainName=%session.Get("domainName")
+  }
+
+  Set objDomain=##class(%iKnow.Domain).Open(domainName)
+  If objDomain'="" {
+  	Set domainId=objDomain.Id
+  	Set metadataField=$Get(^iKnow.SetAnalysis(domainId))
+  } else {
+	  Set domainId=""
+	  Set metadataField=""
+  }
+  Set (Sets,Col1,Col2,Col3)=0
+  Set Set=""
+  If (objDomain="") {
+	  Write "<h1>use URL with 'domain=DomainName'</h1>",!
+  } else {
+	Do %session.Set("domainId",domainId)
+
+    if action="NewConcepts" {
+    	Do ##class(iKnow.SetAnalysis).NewConcepts(domainId)
+    } elseif action="UpdateAllSets" {
+	   Job ##class(iKnow.SetAnalysis).UpdateAllSets(domainId) 
+    }
+
+    ;make array Sets(SetName) = #  (sets with XNE or XNCRC)
+    Set iSet="" For {
+	    Set iSet=$Order(^iKnow.SetAnalysis(domainId,iSet)) If iSet="" Quit
+	    If $Data(^iKnow.SetAnalysis(domainId,iSet,"XNE"))!$Data(^iKnow.SetAnalysis(domainId,iSet,"XNCRC")) {
+		    Set Sets=Sets+1
+		    Set Sets(Sets)=$ListBuild(iSet,iSet)
+	    }
+    }
+    If Sets=1 {
+	    Set Set=$List(Sets(1),1)
+    } else {
+	    Set Set=$Get(%request.Data("set",1))
+	    If Set="*" Set Set=""
+	    If Sets=0 Write "<h1>No new concepts found</h1>"
+    }
+    
+    If action="saveset" {
+    	Set Set=$Get(%request.Data("set",1))
+    	If Set'="" {
+  			Merge entities=%request.Data("entities")
+  			Set ent="" For  {
+  				Set ent=$Order(entities(ent)) If ent="" Quit
+  				;Write ent," = ",entities(ent),"<br>"
+  				Set Type=$Piece(entities(ent),"|",1)
+  				Set Id=$Piece(entities(ent),"|",2)
+  				Set ^iKnow.SetAnalysis(domainId,Set,Type,$Piece(entities(ent),"|",3,99999))=Id
+  				;Kill ^iKnow.SetAnalysis(domainId,Set,"XN"_Type,$Piece(entities(ent),"|",3,99999))
+  			}
+  			Merge ^iKnow.SetAnalysis(domainId,Set,"XE")=^iKnow.SetAnalysis(domainId,Set,"XNE")
+  			Merge ^iKnow.SetAnalysis(domainId,Set,"XCRC")=^iKnow.SetAnalysis(domainId,Set,"XNCRC")
+  			Kill ^iKnow.SetAnalysis(domainId,Set,"XNE")
+  			Kill ^iKnow.SetAnalysis(domainId,Set,"XNCRC")
+    	}
+    }
+    
+    Write "<h1>",Set,"</h1>"
+	;get column E + CRC
+	;get column XE + XCRC
+	;get column XNE + XNCRC in box  
+  	If Set'="" {
+  		Set Col1=0
+  		Set iEnt="" For {
+		  	Set iEnt=$Order(^iKnow.SetAnalysis(domainId,Set,"E",iEnt)) If iEnt="" Quit
+  			Set Col1=Col1+1
+  			Set Col1(Col1)=iEnt
+  		}
+  		Set iEnt="" For {
+		  	Set iEnt=$Order(^iKnow.SetAnalysis(domainId,Set,"CRC",iEnt)) If iEnt="" Quit
+  			Set Col1=Col1+1
+  			Set Col1(Col1)=iEnt
+  		}
+
+  		Set Col2=0
+  		Set iEnt="" For {
+		  	Set iEnt=$Order(^iKnow.SetAnalysis(domainId,Set,"XE",iEnt)) If iEnt="" Quit
+  			If '$Data(^iKnow.SetAnalysis(domainId,Set,"E",iEnt)) {
+  				Set Col2=Col2+1
+  				Set Col2(Col2)=iEnt
+  			}
+  		}
+  		Set iEnt="" For {
+		  	Set iEnt=$Order(^iKnow.SetAnalysis(domainId,Set,"XCRC",iEnt)) If iEnt="" Quit
+  			If '$Data(^iKnow.SetAnalysis(domainId,Set,"CRC",iEnt)) {
+  				Set Col2=Col2+1
+  				Set Col2(Col2)=iEnt
+  			}
+  		}
+
+  		Set Col3=0
+  		Set iEnt="" For {
+		  	Set iEnt=$Order(^iKnow.SetAnalysis(domainId,Set,"XNE",iEnt)) If iEnt="" Quit
+  			Set Col3=Col3+1
+  			Set Col3(Col3)=$Lb("E",^iKnow.SetAnalysis(domainId,Set,"XNE",iEnt),iEnt)
+  		}
+  		Set iEnt="" For {
+		  	Set iEnt=$Order(^iKnow.SetAnalysis(domainId,Set,"XNCRC",iEnt)) If iEnt="" Quit
+  			Set Col3=Col3+1
+  			Set Col3(Col3)=$lb("CRC",^iKnow.SetAnalysis(domainId,Set,"XNCRC",iEnt),iEnt)
+  		}
+  	}
+  
+  }
+
+</script>
+
+  <form name="newForm" action="iKnowSetAnalysisNew.csp" method="post">
+
+
+    <button type="submit" name="action" value="NewConcepts">NewConcepts</button>
+    <button type="submit" name="action" value="UpdateAllSets">UpdateAllSets</button>
+    <br>
+      <select name="set" onchange='javascript:SetOnChange();'>
+        <option value='*'>--- select a Set from the list ---</option>
+	    <csp:loop counter="iSet" From="1" To="#(Sets)#">
+	      <option value=#($List(Sets(iSet),1))#  #($S(Set=$List(Sets(iSet),1):" selected=true",1:""))# >#($List(Sets(iSet),2))#</option>
+	    </csp:loop>
+      </select>
+
+    <table width="100%">
+      <tr>
+        <th align="left">Selected Entities in set</th>
+        <th align="left">Not-Selected Entities in set</th>
+        <th align="left">New Entities for set
+          <input type="hidden" name="set" value="#(Set)#">
+          <button type="submit" name="action" value="saveset">saveset</button></th>
+      </tr>
+      <tr valign="top">
+        <td>
+          <csp:loop counter="iCol" From="1" To="#(Col1)#">
+            <li>#(Col1(iCol))#</li>
+          </csp:loop>
+        </td>
+        <td>
+          <csp:loop counter="iCol" From="1" To="#(Col2)#">
+            <li>#(Col2(iCol))#</li>
+          </csp:loop>
+        </td>
+        <td>
+          <select class="input" size=#($Select(Col3>30:30,1:Col3))# multiple name="entities">
+            <csp:loop counter="iCol" From="1" To="#(Col3)#">
+              <option value='#($List(Col3(iCol),1)_"|"_$List(Col3(iCol),2)_"|"_$List(Col3(iCol),3))#'>#($List(Col3(iCol),3))#</option>
+            </csp:loop>
+          </select>
+        </td>
+      </tr>
+    </table>
+
+ 
+      <br>
+    <table>
+      <tr valign="top">
+        <td>Update All Sets</td>
+        <td>
+    		<button type="submit" name="action" value="UpdateAllSets">UpdateAllSets</button>
+        </td>
+      </tr>
+      <tr>
+        <td colspan=2><i>Log results :</i></td>
+        <td><button name="action" value="refresh">refresh</button></td>
+      </tr>
+      <tr valign="top">
+        <td colspan=2>
+          <script language="cache" runat="server">
+           Set Date=$ZD($H,8)
+           Set iLine=""
+           For  {
+	           Set iLine=$Order(^iKnow.SetAnalysisLog(Date,iLine),-1) If iLine="" Quit
+	           Write ^(iLine),"<br>"
+           }
+         </script>
+        </td>
+      </tr>
+    </table>
+  </form>
+
+</body>
+</html>
+]]></CSP>
+</Export>

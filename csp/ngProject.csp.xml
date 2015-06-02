@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngProject.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<!DOCTYPE html>
+<!--- //call this page with : http://127.0.0.1:57772/csp/setanalysis/ngProject.csp
+to prevent cros or chrome.exe --disable-web-security -->
+<html ng-app="ProjectApp">
+  <head>
+ <link rel="stylesheet" type="text/css" href="nglib/bootstrap/css/bootstrapSpacelab.min.css" />
+ <link rel="stylesheet" type="text/css" href="nglib/additional.css" />
+ </head>
+  <body>
+    <div>
+
+      <form name="frmProject" ng-controller="ProjectController as project" ng-submit="" class="form-horizontal">
+<!--  <pre>$route.current.params = {{$route.current.params}}</pre>  -->
+
+        <fieldset>
+
+          <div class="well">
+            <label>Project Details {{ProjectId}}</label>
+          </div>         
+         
+          <!-- Name -->
+          <div class="form-group">
+            <label for="inputName" class="control-label col-xs-2">Name</label>
+            <div class="col-xs-10">
+              <input type="text" class="form-control" id="inputName" placeholder="Name" ng-model="project.detail.Name">
+            </div>
+          </div>
+           
+          <!-- Description -->
+          <div class="form-group">
+            <label for="inputDescription" class="control-label col-xs-2">Description</label>
+            <div class="col-xs-10">
+              <textarea rows=3 class="form-control" id="inputDescription" placeholder="Description" ng-model="project.detail.Description"></textarea>
+            </div>
+          </div>
+
+          <!-- Domain -->
+          <div class="form-group">
+            <label for="inputDomain" class="control-label col-xs-2">iKnow Domain</label>
+            <div class="col-xs-10">
+              <input type="text" class="form-control" id="inputDomain" placeholder="Domain" ng-model="project.detail.Domain" disabled="disabled">
+            </div>
+          </div>
+            
+          <!-- Metadata Field : ng-init="color2='red'"> -->
+          <div class="form-group">
+            <label for="inputMetadataField" class="control-label col-xs-2" >iKnow Metadata Field</label>
+            <div class="col-xs-10">
+              <select id="inputMetadataField" name="inputMetadataField" class="form-control" ng-model="project.detail.MetadataField" ng-options="option.id as option.text group by option.type for option in project.options">
+
+              </select>
+            </div>
+          </div>       
+                
+          <!-- Metadata Method -->
+          <div class="form-group">
+            <label for="inputMetadataMethod" class="control-label col-xs-2">iKnow Metadata Method</label>
+            <div class="col-xs-10">
+              <input type="text" class="form-control" id="inputMetadataMethod" placeholder="" ng-model="project.detail.MetadataMethod">
+            </div>
+          </div>
+
+          <!-- Blacklists -->
+          <div class="form-group">
+            <label for="inputBlackList" class="control-label col-xs-2" >iKnow Blacklists</label>
+            <div class="col-xs-10">
+              <select id="inputBlackList" name="inputBlackList" class="form-control" multiple="multiple"  ng-model="project.detail.Blacklist" ng-options="option.id as option.text for option in project.options">
+
+              </select>
+            </div>
+          </div>
+
+          <!-- Set Repository -->
+          <div class="form-group">
+            <label for="inputSetRepository" class="control-label col-xs-2" >Set Repository</label>
+            <div class="col-xs-10">
+              <select id="inputSetRepository" name="inputSetRepository" class="form-control" multiple="multiple">
+                <option>Option one</option>
+                <option>Option two</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Save | Switch | Delete -->
+          <div class="form-group">
+            <div class="col-xs-offset-2 col-xs-10">
+              <button type="submit" ng-click="saveForm(project)" class="btn btn-primary">Save</button>
+              <button type="submit" class="btn">Switch</button>
+              <button type="submit" class="btn btn-danger">Delete</button>
+            </div>
+          </div>
+<!--		selected metadatafield : {{project.detail.MetadataField}}
+  	    selected blacklist : {{project.detail.Blacklist}}
+  	    {{project.test}}
+-->
+        </fieldset>
+      </form>
+
+	</div>
+
+
+  </body>
+</html>
+]]></CSP>
+</Export>

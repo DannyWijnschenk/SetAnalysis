@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Storage.Set">
+<TimeCreated>63419,57753.250388</TimeCreated>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*  STRUCTURE of GLOBAL :
+	^iKnow.SetAnalysis=$lb(ExportDir)
+	^iKnow.SetAnalysis(ProjectId) = $ListBuild()
+	^iKnow.SetAnalysis(ProjectId, SetName) = $lb(BatchId or 0)
+	;'D' : Definition of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "D", 1) = $lb(0, PluginId, "Input", "Set", DeepSeeEnabled, RestEnabled, Pattern, SetDescription)
+	                                             or $lb(1,, "SETA or SETB ...")
+	                                             or $lb(2,, "SETA,SETB,...")  (score)
+	;'F' : Filters of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "F", inc) = $lb(metafield,operator,value,displayvalue)
+	;'E' : selected entities/plugin values of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "E", entityValue) = EntityId
+	;'X' : selected and non-selected entities
+	^iKnow.SetAnalysis(ProjectId, SetName, "X", entityValue) = EntityId  (not selected)
+	;'M' : members & values
+	^iKnow.SetAnalysis(ProjectId, SetName, "M", member, EntityId) = ""
+	;'P' : members of the set (metafield ids like patients)
+	^iKnow.SetAnalysis(ProjectId, SetName, "P", member, srcId) = score
+	^iKnow.SetAnalysis(ProjectId, SetName, "P", member, srcId, sentId)=""
+	;'SRC' : sources of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "SRC", srcId)=""
+	;'PS' : only for score :
+	^iKnow.SetAnalysis(ProjectId, SetName, "PS", score, metaValue) = ""
+	;'PX' : only if blacklisted (by removing a member or removing a sentence):
+	^iKnow.SetAnalysis(ProjectId, SetName, "PX", metaValue, srcId, sentId)=""  -> blacklisted metaValue
+
+	;global subscript       : SetBuilder					 Type
+	'D'                       ProjectName.SetName:Entities   Annotation
+	'E'                       ProjectName.SetName:Entities   ResultSet
+	'X'                       ProjectName.SetName:Entities   ResultSet
+
+	'P',Member                ProjectName.SetName:Elements   ResultSet
+	'P',Member,srcId          ProjectName.SetName:Elements   ResultSet
+	'PX'                      ProjectName.SetName:Elements   ResultSet
+	'M'                       ProjectName.SetName:Elements   ResultSet
+	'SRC'                     ProjectName.SetName:Elements   ResultSet
+	
+	'P',Member,srcId,sentId   ProjectName.SetName:Sources    ResultSet
+	'PS'                      ProjectName.SetName:Sources    ResultSet
+	 
+	1. SetAnalysis storage in SetBuilder
+	------
+	2. 'incomplete' sets in SetBuilder (no plugin)
+	TODO : mark all fields that are required
+	TODO : iTable plugin -> Plugin that will use existing values in GetPlugin, will not be erased by recalc
+	3. 'new' attributes in SetAnalysis
+	TODO : how to store other attributes in Sets
+	TODO : how to show them in SetAnalysis
+	4. Eliminate global storage in SetAnalysis
+	TODO : change Save method to Set.Save
+	TODO : change all global access to Set access
+*/
+]]></Content>
+</UDLText>
+
+<Method name="Test">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectName:%String="TestStorage",OnlySub:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim sc as %Status = $$$OK
+	#Dim ProjectId as %String = ""
+	#Dim SetName, Ref, Orig, New, dataOrig, dataNew as %String
+	#Dim Min as %Integer
+	&sql(Select ID into :ProjectId from iKnow_SetAnalysis.Projects Where Name = :ProjectName)
+	If SQLCODE'=0 Quit $$$ERROR(5001,"Project Name not found")
+
+	Set SetName=""
+	Write ProjectName,"(", ProjectId,") ",!
+	Write "Reference",?30,"Orig. SetAnalysis",?50,"Restore from SetB.",!
+	For {
+		Set SetName=$Order(^iKnow.SetAnalysis(ProjectId, SetName)) If SetName="" Quit
+		Try {
+			Set diffSetFound=0
+			Set Ref="^||iKnow.SetAnalysis("""")"
+			Set Min=$L(Ref)-3+$L(ProjectId)+1+$L(SetName)+2+1
+			Kill ^||iKnow.SetAnalysis
+			Merge ^||iKnow.SetAnalysis(ProjectId, SetName) = ^iKnow.SetAnalysis(ProjectId, SetName)
+			Do ..SaveSet(ProjectId, ProjectName, SetName)
+			Kill ^iKnow.SetAnalysis(ProjectId, SetName)	
+			Do ..RestoreSet(ProjectName_"."_SetName)
+			For {
+				Set Ref=$Query(@Ref) If Ref="" Quit
+				Set Orig=$ZReference
+				If OnlySub'="",$QSubscript(Orig,3)'=OnlySub Continue
+				Set New="^"_$E(Orig,4,*)
+				If $Get(@New,"<null>")'=$Get(@Orig,"<null>") {
+					Set dataOrig=$Get(@Orig,"<null>")
+					Set dataNew=$Get(@New,"<null>")
+					If $ListValid(dataOrig),$ListValid(dataNew) {
+						Set diffSubFound=0
+						Set maxList=$S($ListLength(dataOrig)>$ListLength(dataNew):$ListLength(dataOrig),1:$ListLength(dataNew))
+						For iList=1:1:maxList {
+							;we don't care if difference is "" and <null>
+							If $ListGet(dataOrig,iList)'=$ListGet(dataNew,iList) {
+								If 'diffSubFound Write $E(Ref, Min,*) Set diffSubFound=1
+								Write ?30 write $QSubscript(Orig,3),iList," ",$ListGet(dataOrig,iList)
+								Write ?50 write $QSubscript(Orig,3),iList," ",$ListGet(dataNew,iList),!
+								Set diffSetFound=$i(diffSetFound)
+							}
+						}
+					} else {
+						Write $E(Ref, Min,*),?30,dataOrig,?50,dataNew,!
+						Set diffSetFound=$i(diffSetFound)
+					}
+				} else {
+					;Write $E(Ref, Min, *)," ok ",!
+				}				
+			}
+			Write "Total differences for ",SetName," : ",diffSetFound,!
+			
+			Merge ^iKnow.SetAnalysis(ProjectId, SetName) = ^||iKnow.SetAnalysis(ProjectId, SetName)
+		} Catch {
+			Write "caught error ",$ze,!
+			Merge ^iKnow.SetAnalysis(ProjectId, SetName) = ^||iKnow.SetAnalysis(ProjectId, SetName)
+		}
+	}
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="SaveSet">
+<Description>
+how to test it :
+  Do ##class(iKnow.SetAnalysis.Set).SaveSet(19,"DW","TESTSET")
+  Set set=##class(iKnow.SetAnalysis.SetRepository).GetByName("DW.TESTSET:Entities")
+  Write set.Count()
+  Set a=set.GetAnnotation()
+  set.GetResultSet().%Display()
+(*) = required
+Structure of a Setbuilder set for SetAnalysis :
+- #1 : Entities set :
+ -- attributes (*) "PROJECT"     : name of the project in SetAnalysis
+               (*) "PROJECTID"   : project id
+               (*) "TYPE"        : "Entities"
+                   "FORMULA"     : 0 (no formula), 1 (operation on other sets), 2 (score on sets)
+                   "PLUGINID"    : id of plugin (1:SIMILAR, 2:RELATED, 3:CRC, ..., 12:NOPLUGIN)
+	               "INPUT"       : Input value for plugin (input value or SQL statement or ...)
+	               "SET"         : SetName if input is based on another set
+                   "DSENABLED"   : DeepSeeEnabled? (1/0)
+	               "RESTENABLED" : RestEnabled? (1/0)
+                   "PATTERN"     : Patternname if used
+                   "DESCRIPTION" : Set Description
+ -- key : entity literal value (can be concepts, CRC's, paths, sentences)
+ -- value : $lb(  $lb(subkey,subvalue), ...)
+    where subkey (*) "VAL" : Value (entityId, crcId, pathId, sentId)
+                 (*) "SEL" : Selected? (0=not selected, 1=selected, 2=new since selection)
+                     "RS"  : Reason for selection (string)
+- #2 : Elements set (patients,..) :
+-- attributes  (*) "TYPE"         : "Elements"
+               (*) "LINK"         : Name of 'master' set (type="Entities" set)
+-- key : patientid
+-- value : $lb(  $lb(subkey,subvalue), ...)
+   where subkey (*) "VAL" : Value (PatientId)
+                (*) "SEL" : Selected? (0=not selected, 1=selected, 2=new since selection)
+                    "RS"  : Reason for selection (string)
+                    "SRC" : $lb(srcid:sentid,...)
+                    "ENT" : $lb(entityid, ...) (can be crcId, pathId,..)
+                    "COLR" : color to display
+- #3 : Sources set :
+-- attributes   (*) "TYPE"        : "Sources"
+                (*) "LINK"        : Name of 'master' set (type="Entities" set)
+-- key : sourceid
+-- value : $lb(  $lb(sentid, $lb("attrib",attribvalue)), ...) where "attrib" = "neg" for negation</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%Integer,SetName:%String</FormalSpec>
+<Implementation><![CDATA[
+	;^iKnow.SetAnalysis(ProjectId,SetName","E",Value)=Key
+	;19,"TESTSET","D",1)= $lb(0, PluginId, "Input", "Set", DeepSeeEnabled, RestEnabled, Pattern, Description)
+
+	#;
+	#;------ #1 ------
+	#;
+	;First Set contains all E and X (selected and not-selected entities) + D (definition) + F (filters)
+	
+	#Dim storageOffset,storageOffset2,storageOffset3 as %Integer
+	#Dim key, selKey as %String = ""
+	#Dim objResultSet1 as iKnow.SetAnalysis.Storage.ResultSet
+	#Dim definition,sentenceData, value,elementKey,data,sourceData,negationScore as %String
+	#Dim entityData, entId as %String
+	#Dim sc as %Status
+
+	#Dim objArray as %ArrayOfDataTypes
+	#Dim srcId,sentId as %Integer
+	#Dim elementsInSet
+	#Dim setRepositories, setRepClass as %String = ""
+	
+	&sql(Select Name, SetRepositories Into :ProjectName, :setRepositories From iKnow_SetAnalysis.Projects Where ID = :ProjectId)
+
+	If SQLCODE'=0 Quit 0
+
+	If setRepositories="" {
+		Set setRepClass = "iKnow.SetAnalysis.Storage.SetRepository"
+	} else {
+		Set setRepClass=$List(setRepositories,1)
+	}
+
+	set storageOffset = $Increment($$$tFileRoot)
+	Set key="" For {
+		Set key=$Order(^iKnow.SetAnalysis(ProjectId,SetName,"E",key),1,value) If key="" Quit
+		Set $$$tFile(storageOffset,key)=$ListBuild($lb("VAL",value),$lb("SEL",1),$lb("RS",""))  ;selected
+	}
+	Set key="" For {
+		Set key=$Order(^iKnow.SetAnalysis(ProjectId,SetName,"X",key),1,value) If key="" Quit
+		If $Data($$$tFile(storageOffset,key)) Continue
+		Set $$$tFile(storageOffset,key)=$ListBuild($lb("VAL",value),$lb("SEL",0),$lb("RS",""))  ;not selected
+	}
+	Set objResultSet1 = ##class(iKnow.SetAnalysis.Storage.ResultSet).%New(storageOffset)
+	Set objSet1 = ##class(%DeepSee.Sets.Set).%New(objResultSet1)
+	Set definition=$Get(^iKnow.SetAnalysis(ProjectId,SetName,"D",1))
+	Set objArray=##class(%ArrayOfDataTypes).%New()
+	Do objArray.SetAt(ProjectName,"PROJECT")
+	Do objArray.SetAt(ProjectId,"PROJECTID")
+	Do objArray.SetAt("Entities","TYPE")
+	If definition'="" {
+		Do objArray.SetAt($ListGet(definition,1,0),"FORMULA")
+		Do objArray.SetAt($ListGet(definition,2),"PLUGINID")
+		Do objArray.SetAt($ListGet(definition,3),"INPUT")
+		Do objArray.SetAt($ListGet(definition,4),"SET")
+		Do objArray.SetAt($ListGet(definition,5),"DSENABLED")
+		Do objArray.SetAt($ListGet(definition,6),"RESTENABLED")
+		Do objArray.SetAt($ListGet(definition,7),"PATTERN")
+		Do objArray.SetAt($ListGet(definition,8),"DESCRIPTION")
+	}
+	Do objSet1.SetAnnotation(objArray)
+	
+	Set sc = $ClassMethod(setRepClass,"SaveSet", objSet1, ProjectName_"."_SetName_":Entities" )
+
+	#;
+	#;------ #2 ------
+	#;
+	;Second set contains P (patients with sources)
+	set storageOffset2 = $Increment($$$tFileRoot)
+
+	#;
+	#;------ #3 ------
+	#;
+	;Third set contains sources + sentences
+	set storageOffset3 = $Increment($$$tFileRoot)
+
+	Set elementsInSet=0
+	For selKey="P","PX" {
+		Set elementKey="" For {
+			Set value=""
+			Set elementKey=$Order(^iKnow.SetAnalysis(ProjectId,SetName,selKey,elementKey),1,value)
+			If elementKey="" Quit
+			Set elementsInSet=1
+			Set data=""
+			Set sourceData=""
+			Set srcId=""
+			For {
+				set srcId=$Order(^iKnow.SetAnalysis(ProjectId,SetName,selKey,elementKey,srcId),1,negationScore) If srcId="" Quit
+				Set sourceData=sourceData_$lb(srcId)
+				Set sentenceData=""
+				Set sentId=""
+				For {
+					Set sentId=$Order(^iKnow.SetAnalysis(ProjectId,SetName,selKey,elementKey,srcId,sentId),1,negationScore) If sentId="" Quit
+					Set sentenceData=sentenceData_$lb($lb(sentId,$lb("NEG",negationScore)))
+				}
+				Set $$$tFile(storageOffset3,srcId)=sentenceData
+			}
+			set entityData=""
+			Set entId=""
+			For {
+				Set entId=$Order(^iKnow.SetAnalysis(ProjectId,SetName,"M",elementKey,entId)) If entId="" Quit
+				Set entityData=entityData_$lb(entId)
+			}
+			;(patId)=...(srcId|)
+			Set $$$tFile(storageOffset2,elementKey)=$ListBuild($lb("VAL",value),$lb("SEL",selKey="P"),$lb("RS",""),$lb("SRC",sourceData),$lb("ENT",entityData))  ;selected, todo : check for PX, check for negated
+		}
+	}
+
+	If elementsInSet {
+		Set objResultSet2 = ##class(iKnow.SetAnalysis.Storage.ResultSet).%New(storageOffset2)
+		Set objSet2 = ##class(%DeepSee.Sets.Set).%New(objResultSet2)
+		Set objArray2=##class(%ArrayOfDataTypes).%New()
+		Do objArray2.SetAt("Elements","TYPE")
+		Do objArray2.SetAt(ProjectName_"."_SetName_":Entities","LINK")
+		Do objSet2.SetAnnotation(objArray2)
+
+		Set sc = $ClassMethod(setRepClass,"SaveSet", objSet2, ProjectName_"."_SetName_":Elements" )
+
+		Set objResultSet3 = ##class(iKnow.SetAnalysis.Storage.ResultSet).%New(storageOffset3)
+		Set objSet3 = ##class(%DeepSee.Sets.Set).%New(objResultSet3)
+		Set objArray3=##class(%ArrayOfDataTypes).%New()
+		Do objArray3.SetAt("Sources","TYPE")
+		Do objArray3.SetAt(ProjectName_"."_SetName_":Entities","LINK")
+		Do objSet3.SetAnnotation(objArray3)
+		Set sc = $ClassMethod(setRepClass,"SaveSet", objSet3, ProjectName_"."_SetName_":Sources" )
+
+	}
+]]></Implementation>
+</Method>
+
+<Method name="RestoreSet">
+<Description>
+Do ..RestoreSet("PROJECTNAME.SETNAME")</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>SetName:%String</FormalSpec>
+<Implementation><![CDATA[
+	#Dim projectName,setName,Key,Value,SubValue,ElementValue,SelKey,MemberValue,EntityData,SourceData as %String
+	#Dim objArray as %ArrayOfDataTypes
+	#Dim key, data, attrib, attribs, definition,defKeys,defDefaults,OnlyDependencies as %String
+	#Dim patId, srcId, entId, sentId, thisValue, Negation, score as %String
+	#Dim iList, iDef, iItem, iAttrib as %Integer
+	#Dim objSet as %DeepSee.Sets.ArraySetRepository
+	#Dim objResultSet as iKnow.SetAnalysis.Storage.ResultSet
+	#Dim defExists as %Boolean
+	#Dim projectId as %Integer = ""
+	#Dim setRepositories, setRepClass as %String = ""
+	Set projectName=$Piece(SetName,".",1)
+	Set setName=$Piece(SetName,".",2,*)
+
+	&sql(Select ID, SetRepositories Into :projectId, :setRepositories From iKnow_SetAnalysis.Projects Where Name = :projectName)
+	If setRepositories="" {
+		Set setRepClass = "iKnow.SetAnalysis.Storage.SetRepository"
+	} else {
+		Set setRepClass=$List(setRepositories,1)
+	}
+
+	#;
+	#;------ #1 ------
+	#;
+	Set objSet=$ClassMethod(setRepClass,"GetByName",SetName_":Entities")
+	If objSet'="" {
+		Set objArray = objSet.GetAnnotation()	
+		set key=""
+		For {
+			Set Value=objArray.GetNext(.key)
+			If key="" Quit
+			set attrib(key)=Value
+		}
+		Set projectId=$Get(attrib("PROJECTID"),projectId)
+		Set definition=""
+		Set defKeys     = $listbuild("FORMULA","PLUGINID","INPUT","SET"  ,"DSENABLED","RESTENABLED","PATTERN","DESCRIPTION")
+		Set defDefaults = $listbuild(0        ,12        ,""     ,setName,1          ,1            ,""       ,"")
+		Set defExists=0
+		For iDef=1:1:$ListLength(defKeys) {
+			If $Data(attrib($ListGet(defKeys,iDef))) Set defExists=1
+			Set $List(definition,iDef)=$Get(attrib($ListGet(defKeys,iDef)),$List(defDefaults,iDef))
+		}
+		If defExists Set ^iKnow.SetAnalysis(projectId,setName,"D",1)=definition
+		If $List(definition,1)>0 {
+			Set OnlyDependencies=1
+			Do ##class(iKnow.SetAnalysis).Formula(projectId, SetName, $List(definition,3), , , , , .OnlyDependencies)
+			Merge ^iKnow.SetAnalysis(projectId, setName, "DEP")=OnlyDependencies
+		}
+		Set objResultSet=objSet.GetResultSet()
+		While objResultSet.%Next() {
+			Set Key=objResultSet.%GetData(1)
+			Set Value=objResultSet.%GetData(2)  ;Value=$lb($lb(key,val),...)
+			Set ElementValue="",SelKey="X"
+			For iList=1:1:$ListLength(Value) {
+				Set SubValue=$List(Value,iList)
+				If $List(SubValue,1)="SEL" Set SelKey=$Case($List(SubValue,2),1:"E",0:"X",:"X")
+				If $List(SubValue,1)="VAL" Set ElementValue=$List(SubValue,2)
+			}
+			Set ^iKnow.SetAnalysis(projectId,setName,SelKey,Key)=ElementValue
+			If SelKey="E" Set ^iKnow.SetAnalysis(projectId,setName,"X",Key)=ElementValue
+		}
+		Set ^iKnow.SetAnalysis(projectId,setName,"E")=""  ;done
+	}
+
+	#;
+	#;------ #2 ------
+	#;
+/// - #2 : Elements set (patients,..) :
+/// -- attributes  "TYPE"         : "Elements"
+///                "LINK"         : Name of 'master' set (type="Entities" set)
+/// -- key : patientid
+/// -- value : $lb(  $lb(subkey,subvalue), ...)
+///    where subkey  "VAL" : Value (PatientId)
+///                  "SEL" : Selected? (0=not selected, 1=selected, 2=new since selection)
+///                  "RS"  : Reason for selection (string)
+///                  "SRC" : $lb(srcid,...)
+///                  "ENT" : $lb(entid,...)
+///                  "COLR" : color to display
+	Set objSet=$ClassMethod(setRepClass,"GetByName",SetName_":Elements")
+	If objSet'="" {
+		Kill ^||index.SRCP  ;need temp. index on source -> patient
+		Set objResultSet=objSet.GetResultSet()
+		;do $system.OBJ.Dump(objResultSet)
+		While objResultSet.%Next() {
+			Set Key=objResultSet.%GetData(1)
+			Set Value=objResultSet.%GetData(2)  ;Value=$lb($lb(skey,sval),...)
+			Set ElementValue="",SelKey="?",MemberValue="",SourceData="",EntityData=""
+			Set SelKey="P"  ;default is Selected (subscript = "P")
+			For iList=1:1:$ListLength(Value) {
+				Set SubValue=$List(Value,iList)
+				If $List(SubValue,1)="SEL" Set SelKey=$Case($List(SubValue,2),1:"P",0:"PX",:"?")
+				If $List(SubValue,1)="VAL" Set MemberValue=$List(SubValue,2)
+				If $List(SubValue,1)="SRC" Set SourceData=$List(SubValue,2)
+				If $List(SubValue,1)="ENT" Set EntityData=$List(SubValue,2)
+			}
+			;Write !,SelKey
+			Set ^iKnow.SetAnalysis(projectId,setName,SelKey,Key)=MemberValue
+			For iItem=1:1:$ListLength(SourceData) {
+				Set srcId=$List(SourceData,iItem)
+				If srcId'="" {
+					Set ^iKnow.SetAnalysis(projectId,setName,SelKey,Key,srcId)=""
+					Set ^||index.SRCP(srcId)=$lb(SelKey,Key)
+				}
+				If srcId'="" Set ^iKnow.SetAnalysis(projectId,setName,"SRC",srcId)=""
+			}
+			For iItem=1:1:$ListLength(EntityData) {
+				Set entId=$List(EntityData,iItem)
+				If entId'="" Set ^iKnow.SetAnalysis(projectId,setName,"M",Key,entId)=""
+			}
+		}
+
+	}
+
+/// - #3 : Sources set :
+/// -- attributes   "TYPE"        : "Sources"
+///                 "LINK"        : Name of 'master' set (type="Entities" set)
+/// -- key : sourceid
+/// -- value : $lb(  $lb(sentid, $lb("attrib",attribvalue)), ...) where "attrib" = "neg" for negation
+	#;
+	#;------ #3 ------
+	#;
+	Set objSet=$ClassMethod(setRepClass,"GetByName",SetName_":Sources")
+	If objSet'="" {
+		Set objResultSet=objSet.GetResultSet()
+		While objResultSet.%Next() {
+			Set srcId=objResultSet.%GetData(1)  ;srcId
+			; value : $lb(  $lb(sentid, $lb("attrib",attribvalue)), ...)
+			; where "attrib" = "neg" for negation
+			Set Value=objResultSet.%GetData(2)
+			For iItem=1:1:$ListLength(Value) {
+				Set thisValue=$List(Value,iItem)
+				Set sentId=$List(thisValue,1)
+				Set Negation=""
+				For iAttrib=2:1:$ListLength(thisValue) {
+					set attribs=$List(thisValue,iAttrib)  ;eg. $lb("NEG",score)
+					If $List(attribs,1)="NEG" Set Negation=$List(attribs,2)
+				}
+				If sentId'="" {
+					If $Data(^||index.SRCP(srcId)) {
+						Set data=^||index.SRCP(srcId)
+						Set SelKey=$List(data,1)
+						Set patId=$List(data,2)
+						If SelKey'="",patId'="" {
+							Do ##class(iKnow.SetAnalysisPlugin).AddMemberSentence(projectId, setName, SelKey, patId, srcId, sentId, Negation)
+						}
+					}
+				}
+			}
+		}
+	}
+	If $Get(definition)'="",$List(definition)=2 {  //score needs PS subscript
+		;"PS",score,patient)=""
+		Set patId="" For {
+			Set patId=$order(^iKnow.SetAnalysis(projectId,setName,"P",patId),1,score) Quit:patId=""
+			set ^iKnow.SetAnalysis(projectId,setName,"PS", $S(score?.N:+score,1:$list(score,1)), patId)=""
+		}
+	}
+
+	Do ##class(iKnow.SetAnalysis.Sets).SaveSet(projectId, setName)  ;save in sql tables
+]]></Implementation>
+</Method>
+</Class>
+</Export>

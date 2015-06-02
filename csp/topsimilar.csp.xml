@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="topsimilar.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+
+<title>Top Similar Sources</title>
+<link rel="stylesheet" type="text/css" href="topsimilar.css" />
+</head>
+
+<body>
+  <form action="topsimilar.csp">
+    <select name="domain">
+<script language="Cache" runAt="Server">
+	set domain=$Get(%request.Data("domain",1),%session.Get("domain"))
+	set %session.Data("domain")=domain
+	Set objResult=##class(%ResultSet).%New("%iKnow.Domain:GetAllDomains")
+	Do objResult.Execute(1)
+	While objResult.Next() {
+		Write "<option",$Select(domain=objResult.GetData(2):" selected",1:""),">",objResult.GetData(2),"</option>"
+	}
+</script>     
+    </select>
+    <button type="submit" name="action" value="build">build</button>
+    <button type="refresh" name="action" value="refresh">refresh</button>
+  </form>
+<table>
+
+<script language="Cache" runAt="Server">
+	set action=%request.Get("action",1)
+	Set statusData=$lb(-1)
+	Set statusData=$Select(domain="":$lb(,-1),'$Data(^SimilarResults(domain)):$lb(,-1),1:^SimilarResults(domain))
+
+	if action="build" Job ##class(TopSimilar.Utils).CalcSimilars(domain) Hang 3
+	If domain="" {
+		Write "Please select a domainname"
+	} elseif $List(statusData,2)=-1 {
+		Write "Similar Results need to be build"
+	} elseif $List(statusData,2)=0 {
+		Write "Similar Results for ",domain," are being build since ",$ZT($Piece($List(statusData,3),",",2))
+	} else {
+		Set DomainId=$list(statusData,1)
+		Write "<H2>Top 1000 Similar Sources for ",domain,"</H2>",!
+		Write "<table id='gradient-style'>",!
+		Write "<tr><th>Id</th><th width='40%'>Source 1</th><th width='40%'>Source 2</th>"
+		Write "<th align='right'>Matched Entities %</th><th align='right'>New Entities %</th>",!
+		Set iScore=0
+		set iFirst=1
+		Set Score="" For  {
+			Set Score=$Order(^SimilarResults(domain,Score)) Quit:Score=""
+			Set SrcId="" For {
+				Set SrcId=$Order(^SimilarResults(domain,Score,SrcId)) Quit:SrcId=""
+				Set SrcCompId="" For  {
+					Set SrcCompId=$Order(^SimilarResults(domain,Score,SrcId,SrcCompId),1,Data) Quit:SrcCompId=""
+					Set ExtSrcId = $List(Data,2)
+					Set ExtSrcCompId = $List(Data,9)
+					Set iScore=iScore+1
+					If iScore>100 Quit
+					Write "<tr><td align='right'>",iScore,".</td>"
+					Write "<td>",ExtSrcCompId,"</td>"
+					Write "<td>",ExtSrcId,"</td>"
+					Write "<td align='right'>",$J($List(Data,3)*100,5,2),"%","</td>"
+					Write "<td align='right'>",$J($List(Data,4)*100,5,2),"%","</td>"
+					Write "</tr>"
+					Write "<tr><td></td>"
+					Do ##class(TopSimilar.Utils).GetDiffConcepts(DomainId,SrcId,SrcCompId,.Diff)
+					For iCol=1,2 {
+						Kill tHighlight
+						Set iDiff=""
+						for  {
+							set iDiff=$order(Diff(iCol,iDiff)) if iDiff="" quit
+							Set tHighlight("ENTITY"," "_iDiff)="<b><span style='width:20px;height:20px;background-color:#ffcc00;'>"
+						}
+						write "<td>",##class(TopSimilar.Utils).HighlightSource(DomainId,$Select(iCol=1:SrcId,1:SrcCompId),.tHighlight),"</td>"
+					}
+					write "</tr>"
+				}
+			}
+		}
+		Write "</table>",!
+	}
+	</script>
+
+</body>
+</html>]]></CSP>
+</Export>

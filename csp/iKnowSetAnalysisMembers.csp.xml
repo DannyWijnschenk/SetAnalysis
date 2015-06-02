@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="iKnowSetAnalysisMembers.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<html>
+<head>
+<title>Setanalysis per member</title>
+<link rel="stylesheet" href="iKnowSetAnalysis.css">
+<script language="cache" runat="server">
+  Set action=$Get(%request.Data("action",1))
+  Set currentId=$Get(%request.Data("currentId",1))
+  If currentId="",action="" Set currentId=0,action="next"
+
+  Set projectName=$Select($Data(%request.Data("project",1)):%request.Data("project",1),$Data(%session.Data("projectName")):%session.Data("projectName"),1:"")
+  Set domainId="",metadataField="??"
+  If projectName'="" {
+  	  &sql(Select Id, iKnowDomain, iKnowMetafield, Resource into :projectId, :domainName, :metadataField, :resource From iKnow_SetAnalysis.Projects Where Name = :projectName)
+	  If SQLCODE=0 {  	  
+  	    Do %session.Set("projectName",projectName)
+	    Do %session.Set("domainName",domainName)	  
+  	    Set objDomain=##class(%iKnow.Domain).Open(domainName)
+        If objDomain'="" {
+  	      Set domainId=objDomain.Id
+  	      Do %session.Set("domainId",domainId)
+        }
+	  }
+  }
+
+	/*
+	use this code to get all members from domain
+  Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(domainId, metadataField, .sc)
+  Do ##class(%iKnow.Queries.MetadataAPI).GetFieldValues(.tempMembers, domainId, metadataField, 0)
+  Set iMember=""
+  for {
+	  Set iMember=$Order(tempMembers(iMember)) If iMember="" Quit
+  	  If $Data() Set Members($List(tempMembers(iMember),1))=""
+  }
+	*/
+	//TODO : better to use only members from sets, need index on members for better performance !  
+	Set Set="" For iSet=1:1 {
+		Set Set=$Order(^iKnow.SetAnalysis(projectId,Set)) If Set="" Quit
+		Set Member=""
+		For iMember=1:1 {
+			Set Member=$Order(^iKnow.SetAnalysis(projectId, Set, "P", Member)) If Member="" Quit
+			Set Members(Member)=""
+		}
+	}
+
+  Kill tempMembers
+  Set firstId=$Order(Members(""))
+  
+  Merge MemberDetails=%session.Data("MemberDetails")
+  
+  If action="first" {
+  	Set currentId=firstId
+  } elseif action="last" {
+  	Set currentId = $Order(Members(""),-1)
+  } elseIf action="next" {
+  	Set currentId=$Order(Members(currentId))
+  	If currentId="" Set currentId=firstId
+  } elseif action="prev" {
+  	Set currentId=$Order(Members(currentId),-1)
+  	If currentId="" Set currentId=firstId
+  } elseif action="detail" {
+  	Set SrcId=%request.Data("SrcId",1)
+  	set SentId=%request.Data("SentId",1)
+  	If SrcId'="",SentId'="" {
+  		Set MemberDetails(SrcId,SentId)=$Get(MemberDetails(SrcId,SentId))+%request.Data("Delta",1)
+  		Merge %session.Data("MemberDetails")=MemberDetails
+  	}
+  }
+  If currentId'="" {
+  } else {
+	  set currentId = firstId
+  }
+</script>
+</head>
+<body>
+ <script language="cache" runat="server">
+  Set projectName=$Get(%session.Data("projectName"))
+</script>
+
+<!---  <i>SetAnalysis Project <b>#(projectName)#</b> on Domain <b>#(%session.Get("domainName"))#</b> (#(%session.Get("domainId"))#), based on metadatafield <b>#(%session.Get("metadataField"))#</b></i>-->
+  <div class="tabs">
+  <ul>
+	<li id="tab6"><a href="iKnowSetAnalysis.csp?action=tabproject">Project</a></li>
+	<li id="tab2"><a href="iKnowSetAnalysis.csp?action=tabplugin">Sets</a></li>
+	<li id="tab3"><a href="iKnowSetAnalysis.csp?action=tabformula">Formula</a></li>
+	<li id="tab1"><a href="iKnowSetAnalysis.csp?action=tabfilter">Filter</a></li>
+	<li id="tab4"><a href="iKnowSetAnalysis.csp?action=tabtools">Tools</a></li>
+	<li id="tab5"><a href="iKnowSetAnalysisHelp.csp">Help</a></li>
+  </ul>
+  </div>
+    
+<div class="right">
+  <div class="tabs">
+  <ul>
+	<li id="tab10"><a href="iKnowSetAnalysis.csp?action=setsdetail">Detail</a></li>
+	<li id="tab11"><a href="iKnowSetAnalysis.csp?action=setsoverview">Overview</a></li>
+	<li id="tab12"><a href="iKnowSetAnalysis.csp?action=setstreeview">Treeview</a></li>
+   	<li id="tab13"><a href="iKnowSetAnalysis.csp?action=setspanellookup">Lookup</a></li>
+	<li id="tab14"><a href="iKnowSetAnalysisDashboard.csp?action=dashboard">Dashboard</a></li>
+  	<li id="tab15" class="selected"><a href="iKnowSetAnalysisMembers.csp?action=null">Members</a></li>
+  </ul>
+  </div>
+	&nbsp;&nbsp;<a href='iKnowSetAnalysis.csp?action=refresh'><img src='refresh.png' title='refresh the page'width=16 height=16 border=0></a>
+	&nbsp;<a href='iKnowSetAnalysis.csp?CacheLogout=end'><img src='logout.png' title='logout and go to home page' border=0></a>
+  <br>  
+</div>
+<div class="sets">
+  <div class="controls">
+    Select a #(metadataField)#:<a href="iKnowSetAnalysisMembers.csp?action=first"><img src="first.png"></a> 
+    <a href="iKnowSetAnalysisMembers.csp?action=prev&currentId=#(currentId)#"><img src="prev.png"></a> 
+    <select name="selection" onchange="window.location.href ='iKnowSetAnalysisMembers.csp?currentId=' + this.value">
+	  <script language="cache" runat="server">Set Member=$Order(Members(""))</script>
+      <csp:while condition="+Member>0">
+        <option value="#(Member)#" #($Select(currentId=Member:"selected",1:""))#>#(Member)#</option>
+	    <script language="cache" runat="server">Set Member=$Order(Members(Member))</script>
+      </csp:while>
+    </select>  
+    <a href="iKnowSetAnalysisMembers.csp?action=next&currentId=#(currentId)#"><img src="next.png"></a> 
+    <a href="iKnowSetAnalysisMembers.csp?action=last"><img src="last.png"></a>
+  </div>
+  <csp:if condition="+currentId>0">
+	<br>Defined sets for this #(metadataField)#:<br><br>
+	<script language="cache" runat="server">
+    ;patient data for #(currentId)#
+    	Set Set=""
+		For iSet=1:1 {
+			Set Set=$Order(^iKnow.SetAnalysis(projectId,Set)) If Set="" Quit
+			//if only sets available via REST : If $ListGet(^iKnow.SetAnalysis(projectId,Set,"D",1),6)=1,$Data(^iKnow.SetAnalysis(projectId,Set,"P",currentId)) {
+			If $Data(^iKnow.SetAnalysis(projectId,Set,"P",currentId)) {
+				Write Set,"<br>"
+				Write "<ul class='li_none'>"
+				Set SrcId=""
+				For  {
+					Set SrcId=$Order(^iKnow.SetAnalysis(projectId,Set,"P",currentId,SrcId)) If SrcId="" Quit
+					If $Data(MemberDetails(SrcId)) {
+						//get sentences before and after in array
+ 						Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.SrcSentences, domainId, SrcId, 0)
+					}
+					Set SentId=""
+					For  {
+						Set SentId=$Order(^iKnow.SetAnalysis(projectId,Set,"P",currentId,SrcId,SentId)) If SentId="" Quit
+						Kill Sentence
+						Set Sentence(0)=SentId
+						Write "<li >"
+						Write "&nbsp;<a href='iKnowSetAnalysisMembers.csp?action=detail&Delta=1&currentId=",currentId,"&SrcId=",SrcId,"&SentId=",SentId,"'><img src='plus.gif' border=0></a>"
+						Write "&nbsp;<a href='iKnowSetAnalysisMembers.csp?action=detail&Delta=-1&currentId=",currentId,"&SrcId=",SrcId,"&SentId=",SentId,"'><img src='minus.gif' border=0></a>"
+						
+						If $Data(MemberDetails(SrcId,SentId)) {
+							//get sentences before and after in array
+ 							Set Max=MemberDetails(SrcId,SentId)
+ 							Set thisSentNr=""
+ 							Set iSent="" For {
+ 								Set iSent=$Order(SrcSentences(iSent)) If iSent="" Quit
+ 								If $List(SrcSentences(iSent),1)=SentId Set thisSentNr=iSent Quit
+ 							}
+							If thisSentNr'="" { 							
+ 								for i=1:1:Max {
+ 									If $Data(SrcSentences(thisSentNr+i)) Set Sentence(i)=$List(SrcSentences(thisSentNr+i),1)
+ 								}
+ 								for i=1:1:Max {
+ 									If $Data(SrcSentences(thisSentNr-i)) Set Sentence(-i)=$List(SrcSentences(thisSentNr-i),1)
+ 								}
+							}
+						}
+						Set iSent="" For  {
+							Set iSent=$Order(Sentence(iSent)) If iSent="" Quit
+							Set Sentence = ##class(iKnow.SetAnalysis).GetSentence(domainId, Sentence(iSent), .Terms)
+							Write $S(iSent=0:">><b>",1:""),Sentence,$S(iSent=0:"</b>",1:""),"<br>"
+						}
+						Write "</li>"
+					}
+				}
+				Write "</ul>"
+			}
+		}
+    </script>
+  </csp:if>
+</div>
+</body>
+</html>
+]]></CSP>
+</Export>

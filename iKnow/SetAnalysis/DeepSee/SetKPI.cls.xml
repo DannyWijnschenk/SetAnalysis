@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.DeepSee.SetKPI">
+<Description>
+iKnow.SetAnalysis.DeepSee.SetKPI</Description>
+<Super>%DeepSee.KPI</Super>
+<TimeCreated>63109,56100.963812</TimeCreated>
+
+<Parameter name="DOMAIN">
+</Parameter>
+
+<Parameter name="RESOURCE">
+</Parameter>
+
+<XData name="KPI">
+<Description>
+This XData definition defines the KPI.</Description>
+<XMLNamespace>http://www.intersystems.com/deepsee/kpi</XMLNamespace>
+<Data><![CDATA[
+<kpi xmlns="http://www.intersystems.com/deepsee/kpi"
+ name="SetKPI" sourceType="sql"
+ caption=""
+ sql=""
+>
+<property name="Members" displayName="Members" columnNo="2"/>
+
+<filter name="Project" displayName="Project" sql="Select Name from iKnow_SetAnalysis.Projects Order By Name"/>
+<filter name="GroupName" displayName="GroupName" sql="Select DISTINCT %Exact(GroupName) from iKnow_SetAnalysis.Sets"/>
+<filter name="Set" displayName="Set" sql="Select DISTINCT %Exact(Name) from iKnow_SetAnalysis.Sets"/>
+</kpi>
+]]></Data>
+</XData>
+
+<Method name="%OnLoadKPI">
+<Description>
+Notification that this KPI is being executed.
+This is a good place to override properties, such as range and threshold.</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="%OnGetSQL">
+<Description>
+Return an SQL statement to execute.</Description>
+<FormalSpec><![CDATA[&pSQL:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set pSQL="Select SetId->Name, Count(*) as Members From iKnow_SetAnalysis.SetMembers"
+	If $IsObject(..%filterValues) {
+		Set (sqlProject,sqlGroup,sqlSet)=""
+		If ..%filterValues.GroupName'="" {
+			set sqlGroup = " (("_..%GetSQLForFilter("SetId->GroupName","GroupName")_")"
+			set sqlGroup = sqlGroup _ " or (SetId->Name = 'All'))"
+		}
+		If ..%filterValues.Set'="" {
+			set sqlSet = " ("_..%GetSQLForFilter("SetId->Name","Set")_")"
+		}
+		If ..%filterValues.Project'="" {
+			set sqlProject = " ("_..%GetSQLForFilter("SetId->ProjectId->Name","Project")_")"
+		}
+		If (sqlGroup_sqlSet_sqlProject) '="" {
+			Set pSQL=pSQL_" where"
+			if sqlGroup'="" set pSQL=pSQL_" "_sqlGroup
+			if sqlSet'="" set pSQL=pSQL_" "_$S(sqlGroup'="":"and ",1:"")_sqlSet
+			if sqlProject'="" set pSQL=pSQL_" "_$S((sqlGroup_sqlSet)'="":"and ",1:"")_sqlProject
+		}
+	}
+	Set pSQL=pSQL_" Group By SetId Order By SetId->Name"	
+
+	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="%OnDashboardAction">
+<Description>
+This callback is invoked from a dashboard when an action defined by this dashboard is invoked.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pAction:%String,pContext:%ZEN.proxyObject</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	// pAction is the name of the action (as defined in the XML list).
+	// pContext contains information from the client
+	// and can be used to return information.
+	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="%OnGetFilterMembers">
+<Description><![CDATA[
+Callback to get additional members for a KPI filter.
+This takes the form:<br/>
+pMembers($I(pMembers))=$LB(text,value)<br/>
+<var>pSearchKey</var> is the search key entered by the user, if applicable.<br/>
+<var>pFilterValues</var> is an array of all current filter values.<br/>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pFilter:%String,*pMembers:%List,pSearchKey:%String="",pDataSourceName:%String="",&pFilterValues:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit $$$OK
+]]></Implementation>
+</Method>
+</Class>
+</Export>

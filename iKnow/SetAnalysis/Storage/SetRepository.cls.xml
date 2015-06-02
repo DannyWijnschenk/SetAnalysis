@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Storage.SetRepository">
+<Super>%DeepSee.Sets.ArraySetRepository</Super>
+<TimeCreated>63419,58074.188019</TimeCreated>
+
+<Method name="GetDefaultMetadata">
+<Description>
+todo:
+--make 3 repositories (entities,elements,sources)
+--change the code below for each specific repository
+--change %DeepSee.DomainExpert.wizards.HeaderKeyExplorer to creat specialize editor for each
+returns an array containg default metadata for a new set of keys</Description>
+<ClassMethod>1</ClassMethod>
+<ReturnType>%ObjectHandle</ReturnType>
+<Implementation><![CDATA[
+		s ann=##class(%ArrayOfDataTypes).%New()
+		d ann.SetAt($lb("header","action","norm","code"),"COLUMNS")
+		s datad=$lb($lb("header","%Boolean"),$lb("action","%Integer"),$lb("norm","%String"),$lb("code","%String"))
+		s datae=$lb($lb("header",1),$lb("action",1),$lb("norm",1),$lb("code",1))
+		s datah=$lb($lb("header","Header"),$lb("action","Action"),$lb("norm","Synonym"),$lb("code","Code"))
+		
+		d ann.SetAt(datad,"DATATYPE")
+		d ann.SetAt(datae,"EDITABLE")
+		d ann.SetAt(datah,"TITLE")
+		
+
+		quit ann
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnaBABC.SetRepositoryD</DataLocation>
+<DefaultData>SetRepositoryDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnaBABC.SetRepositoryD</IdLocation>
+<IndexLocation>^iKnow.SetAnaBABC.SetRepositoryI</IndexLocation>
+<StreamLocation>^iKnow.SetAnaBABC.SetRepositoryS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="SetArray">
+<Attribute>SetArray</Attribute>
+<Structure>subnode</Structure>
+<Subscript>"SetArray"</Subscript>
+</Data>
+<Data name="SetRepositoryDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Name</Value>
+</Value>
+<Value name="3">
+<Value>Annotation</Value>
+</Value>
+<Value name="4">
+<Value>AnnotationArray</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

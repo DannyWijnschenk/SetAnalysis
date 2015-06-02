@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="ngTest.csp" application="/csp/setanalysis/" default="1"><![CDATA[
+<!DOCTYPE html>
+<!--- //call this page with : http://127.0.0.1:57772/csp/setanalysis/ngProjects.csp
+to prevent cros or chrome.exe --disable-web-security -->
+<html ng-app="testrest">
+  <head>
+ <link rel="stylesheet" type="text/css" href="nglib/bootstrap.css" />
+ <link rel="stylesheet" type="text/css" href="nglib/additional.css" />
+ </head>
+  <body>
+    <input type="text" ng-model="naam"></input>
+	<p>{{naam}}</p>
+    <div ng-controller="projectController">
+      <table class="table table-bordered">
+        <tbody ng-repeat="project in projectsData" ng-click="selectProject(project)" ng-switch on="isSelected(project)">
+          <tr ng-class-even="'lightgray'" ng-class-odd="'lightgray'">
+            <td>{{project.link.rel}}</td>
+            <td>{{project.description}}</td>
+          </tr>
+          <tr class="lightgray" ng-switch-when="true">
+            <td colspan=2>
+			  <div ng-controller="setController">
+			    <table>
+			      <tr ng-repeat="set in setsData">
+			        <td>&nbsp;&nbsp;<img src="next.png">&nbsp;{{set.link.rel}}&nbsp;</td>
+			        <td>{{set.link.desc}}</td>
+			       </tr>
+			     </table>
+			   </div>
+			 </td>
+		  </tr>
+		</tbody>
+	   </table>
+	 </div>
+
+    <script type="text/javascript" src="nglib/angular.min.js"></script>
+    <script type="text/javascript" src="nglib/angular-resource.min.js"></script>
+	<script type="text/javascript" src="ngTest.js"></script>
+
+  </body>
+</html>
+]]></CSP>
+</Export>
