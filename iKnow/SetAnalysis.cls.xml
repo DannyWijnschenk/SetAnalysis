@@ -2,7 +2,8 @@
 <Export generator="Cache" version="25">
 <Class name="iKnow.SetAnalysis">
 <Description>
-Version : V. 2.0.11 15/12/2014</Description>
+Version : V. 2.0.11 15/12/2014
+Test</Description>
 <IncludeCode>%IKPublic,iKnowSetAnalysisIncludes</IncludeCode>
 <TimeCreated>62725,67089.805565</TimeCreated>
 
