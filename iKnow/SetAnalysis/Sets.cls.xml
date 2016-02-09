@@ -190,6 +190,7 @@ calculated name (the last part of the name after last dot)</Description>
 			Set Data=$Get(^iKnow.SetAnalysis(ProjectId, Set, "P", Member))
 			Set Score=$ListGet(Data,1)
 			Set ScoreSets=$ListGet(Data,2)
+			Set Approved=$ListGet(Data,3)
 			If ScoreSets'="" Set ScoreSets=$ListToString(ScoreSets,",")
 			Set Frequency=0
 			Set Src="" For {
@@ -200,8 +201,8 @@ calculated name (the last part of the name after last dot)</Description>
 				}
 			}
 			Set ThisMember=$Select(ConvertMember="":Member,1:##class(%iKnow.DeepSee.CubeUtils).GetSourceObjectId(ConvertMember,Member))
-			&sql(Insert Into iKnow_SetAnalysis.SetMembers (SetId, Member, Score, ScoreSets, Frequency )
-			     Values (:SetId, :ThisMember, :Score, :ScoreSets, :Frequency))
+			&sql(Insert Into iKnow_SetAnalysis.SetMembers (SetId, Member, Score, ScoreSets, Frequency, Approved )
+			     Values (:SetId, :ThisMember, :Score, :ScoreSets, :Frequency, :Approved))
 			Set MemberId = %ROWID
 			Set Src="" For {
 				Set Src=$Order(^iKnow.SetAnalysis(ProjectId, Set, "P", Member, Src)) If Src="" Quit

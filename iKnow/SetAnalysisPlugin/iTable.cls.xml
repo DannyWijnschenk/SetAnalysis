@@ -70,7 +70,7 @@ ID's 1-999 are reserved, custom plugins start with 1000</Description>
 <Description><![CDATA[
 Each derived plugin should override & implement 4 methods : GetPlugin, GetPluginValue, GetPluginId, SetPluginMembers]]></Description>
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
 	;keep entities stored in this set

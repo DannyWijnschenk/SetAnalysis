@@ -71,10 +71,14 @@ Order in which they appear in dropdown lists</Description>
 <Description><![CDATA[
 SQL needs to give words & metafieldid]]></Description>
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
 
+	;TODO : make more generic : 
+	;       replace data.document by package.table of iFind Index Table
+	;       replace data_document.document_itext by package_table.table_iFindindexname
+	;       replace doc.patientid by used iKnow metafield (corresponding SQL column)
 	Set SQL="select distinct %exact(entit.StrippedEntityId->Value) as Value, doc.patientid as Member"
 	Set SQL=SQL_" from %iFind.SimilarEntity('"
 	Set SQL=SQL_Input
@@ -84,8 +88,31 @@ SQL needs to give words & metafieldid]]></Description>
 	Set SQL=SQL_" inner join data.document as doc on doc.Id = ent.recid"
 
 	Set Input=SQL
+
+	/* @UZB:
+	Set SQL="select EntValue as Value" ;, doc.patientid as Member"
+	Set SQL=SQL_" from %iFind.SimilarEntity('"
+	Set SQL=SQL_Input
+	Set SQL=SQL_"','a',1) as sim"
+	;Set SQL=SQL_" inner join data_document.document_itext_EntSpreadRec as ent on sim.entid=ent.EntityId"
+	;Set SQL=SQL_" inner join data.document as doc on doc.Id = ent.recid"
+	;If Where'="" Set SQL=SQL_" Where "_Where
+	*/
 	
-	/* rest of the method is exactly the SQL (##super) implmentation */ 
+	// if domain exist in iKnow.SetAnalysis.Domains, and has an iFind Where
+	// than we need to add it to the Where clause
+	// e.g. Where doc.medServiceId->Domein = 'myDomain'
+	//                ================================= 
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iFindWhere Into :iFindWhere From iKnow_SetAnalysis.Domains Where ID = :DomainId)
+	If SQLCODE=0 {
+		Set SQL = SQL_" Where doc."_iFindWhere
+	}
+
+
+	/* rest of the method is exactly the SQL (##super) implementation */ 
+
+
 	Set sc = ##super(PluginId,ProjectId, Input, InputPattern, InputSet, objFilter,.resultPtr, Blacklists)
 	Quit sc
 ]]></Implementation>

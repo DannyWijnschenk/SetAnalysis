@@ -69,11 +69,13 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="GetPlugin">
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String,Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
 	Set sc=$$$OK
+ 	Do ..GetPageSize(.Page,.PageSize, Batch)
 	&sql(Select iKnowMetafield into :fieldName from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
 	If InputSet="" Quit 0
@@ -86,7 +88,7 @@ Order in which they appear in dropdown lists</Description>
 		Kill Sources
 		If 1 {  // look in all sources from member
 			Set objFilter=##class(%iKnow.Filters.SimpleMetadataFilter).%New(DomainId,fieldName,"=",Member)
-			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.resultSources,DomainId,0,,objFilter)
+			Do ##class(%iKnow.Queries.SourceAPI).GetByDomain(.resultSources,DomainId,Page,PageSize,objFilter)
 			Set iSrc="" For {
 				Set iSrc=$Order(resultSources(iSrc)) If iSrc="" Quit
 				Set srcId=$List(resultSources(iSrc),1)

@@ -67,14 +67,20 @@ Order in which they appear in dropdown lists</Description>
 <Default>0</Default>
 </Parameter>
 
+<Parameter name="PageSize">
+<Default>500</Default>
+</Parameter>
+
 <Method name="GetPlugin">
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String="500"</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
 	Set sc=$$$OK
- 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+	Do ..GetPageSize(.Page, .PageSize, Batch, ..#PageSize)
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
  	If InputSet'="" {
 		Kill result
 		Set Input=""
@@ -82,7 +88,7 @@ Order in which they appear in dropdown lists</Description>
 		For  {
 			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
 			Kill resultInput
-			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.resultInput, DomainId, $lb(Input), 0, , objFilter)
+			Set sc = ..GetByEntities(.resultInput, DomainId, $lb(Input), Page, PageSize, objFilter)
 			Set iCount=""
 			For  {
 				Set iCount=$Order(resultInput(iCount)) If iCount="" Quit
@@ -98,11 +104,11 @@ Order in which they appear in dropdown lists</Description>
 				Set Wildcard(iPiece)=$Case($Piece(Input,"|",iPiece),"":1,"*":1,:0)
 				If Wildcard(iPiece) Set Wildcard=1
 			}
-			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",1),","), 0, , objFilter,,$$$USEPOSM)
+			Set sc = ..GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",1),","), Page, PageSize, objFilter,$$$USEPOSM)
 			Merge result=tempresult
 			set result=$Order(result(""),-1)
 	
-			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",2),","), 0, , objFilter,,$$$USEPOSR)
+			Set sc = ..GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",2),","), Page, PageSize, objFilter,$$$USEPOSR)
 			If Wildcard(1) {  //all results from 2 are valid
 				Set iResult="" For {
 					Set iResult=$Order(tempresult(iResult)) If iResult="" Quit
@@ -119,7 +125,7 @@ Order in which they appear in dropdown lists</Description>
 				}
 			}
 
-			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.tempresult, DomainId,  $ListFromString($Piece(Input,"|",3),","), 0, , objFilter,,$$$USEPOSS)
+			Set sc = ..GetByEntities(.tempresult, DomainId,  $ListFromString($Piece(Input,"|",3),","), Page, PageSize, objFilter,$$$USEPOSS)
 			If Wildcard(1) & Wildcard(2) {
 				Set iResult="" For {
 					Set iResult=$Order(tempresult(iResult)) If iResult="" Quit
@@ -136,7 +142,7 @@ Order in which they appear in dropdown lists</Description>
 				}
 			}
 		} else {
-			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.result, DomainId, $ListFromString(Input,","), 0, , objFilter)
+			Set sc = ..GetByEntities(.result, DomainId, $ListFromString(Input,","), Page, PageSize, objFilter)
 		}
 	}
 
@@ -167,6 +173,35 @@ Order in which they appear in dropdown lists</Description>
 	}
 	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
 	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetByEntities">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&resultInput,DomainId,Input,Page,PageSize,objFilter,Type]]></FormalSpec>
+<Implementation><![CDATA[
+	If '$Data(Type) Set Type = $$$USEPOSALL
+	If PageSize [ "#" {
+		Set CutOff = +PageSize
+		Set PageSize = 100
+		Set iCount = 0, Stop = 0
+		For Page=1:1 {
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.resultTemp, DomainId, Input, Page, PageSize, objFilter,,Type)
+			If $Order(resultTemp(""))="" Quit
+			Set iResult=""
+			For {
+				Set iResult=$Order(resultTemp(iResult),1,data) If iResult="" Quit
+				If $List(data,5) < CutOff Set Stop = 1 Quit
+				Set iCount=iCount+1
+				Set resultInput(iCount)=data
+			}
+			If Stop Quit
+		}
+	}
+	else {
+		Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.resultInput, DomainId, Input, Page, PageSize, objFilter,,Type)
+	}
+	Return sc
 ]]></Implementation>
 </Method>
 

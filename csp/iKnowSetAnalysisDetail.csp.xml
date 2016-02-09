@@ -69,12 +69,18 @@ function toggle(displayId, blockId, extraText) {
 	  	Do ##class(iKnow.SetAnalysis).RemoveMemberFromSet(projectId, Set, metavalue)
 	  } elseif action = "restore" {
 	  	Do ##class(iKnow.SetAnalysis).RestoreMemberToSet(projectId, Set, metavalue)
+	  } elseif action = "approve" {
+	  	Do ##class(iKnow.SetAnalysis).ApproveMemberInSet(projectId, Set, metavalue)
 	  } elseif action = "allsources" {
 	  	Set AllSources=1
 	  } elseif action = "removesent" {
 	    Set sentId=$Get(%request.Data("sent",1))
 	    Set srcId=$Get(%request.Data("src",1))
 	  	Do ##class(iKnow.SetAnalysis).RemoveSentenceFromSet(projectId, Set, sentId, srcId)
+	  } elseif action="sentences" {
+	  	;init sort if sorted
+	  	//no need to do this here, better when user clicked on sort icon, todo : remove emty if when test is OK
+
 	  }
 	  Do ##class(iKnow.SetAnalysis).OutputMetaDetail(projectId, Set, metavalue, AllSources)
   }  

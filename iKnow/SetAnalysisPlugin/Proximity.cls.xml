@@ -69,10 +69,12 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="GetPlugin">
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set sc=$$$OK
+ 	Do ..GetPageSize(.Page,.PageSize, Batch)
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
 	If InputSet'="" {
@@ -83,7 +85,7 @@ Order in which they appear in dropdown lists</Description>
 			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
 			Set EntityId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Input)
 			Kill resultInput
-			Set sc = ##class(%iKnow.Semantics.ProximityAPI).GetProfileForEntity(.resultInput, DomainId, EntityId, 0)
+			Set sc = ##class(%iKnow.Semantics.ProximityAPI).GetProfileForEntity(.resultInput, DomainId, EntityId, Page, PageSize)
 			Set iCount=""
 			For  {
 				Set iCount=$Order(resultInput(iCount)) If iCount="" Quit
@@ -92,7 +94,7 @@ Order in which they appear in dropdown lists</Description>
 		}
 	} else {
 		Set EntityId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Input)
-		Set sc = ##class(%iKnow.Semantics.ProximityAPI).GetProfileForEntity(.result, DomainId, EntityId, 0)
+		Set sc = ##class(%iKnow.Semantics.ProximityAPI).GetProfileForEntity(.result, DomainId, EntityId, Page, PageSize)
 	}
 	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
 	Set iCount="" For {

@@ -67,12 +67,18 @@ Order in which they appear in dropdown lists</Description>
 <Default>0</Default>
 </Parameter>
 
+<Parameter name="PageSize">
+<Default>500</Default>
+</Parameter>
+
 <Method name="GetPlugin">
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String="500"</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Do ..GetPageSize(.Page, .PageSize, Batch, ..#PageSize)
  	Set sc=$$$OK
 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
  
@@ -83,7 +89,7 @@ Order in which they appear in dropdown lists</Description>
 		For  {
 			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
 			Kill resultInput
-			Set sc = ##class(%iKnow.Queries.EntityAPI).GetRelated(.resultInput, DomainId, Input, 0, , objFilter, , , , , , Blacklists)
+			Set sc = ..GetRelated(.resultInput, DomainId, Input, Page, PageSize, objFilter, Blacklists)
 			Set iCount=""
 			For  {
 				Set iCount=$Order(resultInput(iCount)) If iCount="" Quit
@@ -91,7 +97,7 @@ Order in which they appear in dropdown lists</Description>
 			}
 		}
 	} else {
-		Set sc = ##class(%iKnow.Queries.EntityAPI).GetRelated(.result, DomainId, Input, 0, , objFilter, , , , , , Blacklists)
+		Set sc = ..GetRelated(.result, DomainId, Input, Page, PageSize, objFilter, Blacklists)
 	}
 
 	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
@@ -103,6 +109,35 @@ Order in which they appear in dropdown lists</Description>
 	}
 	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
 	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetRelated">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&resultInput,DomainId,Input,Page,PageSize,objFilter,Blacklists]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	If PageSize [ "#" {
+		Set CutOff = +PageSize
+		Set PageSize = 100
+		Set iCount = 0, Stop = 0
+		For Page=1:1 {
+			Set sc = ##class(%iKnow.Queries.EntityAPI).GetRelated(.resultTemp, DomainId, Input, Page, PageSize, objFilter, , , , , ,Blacklists)
+			If $Order(resultTemp(""))="" Quit
+			Set iResult=""
+			For {
+				Set iResult=$Order(resultTemp(iResult),1,data) If iResult="" Quit
+				If $List(data,3) < CutOff Set Stop = 1 Quit
+				Set iCount=iCount+1
+				Set resultInput(iCount)=data
+			}
+			If Stop Quit
+		}
+	}
+	else {
+		Set sc = ##class(%iKnow.Queries.EntityAPI).GetRelated(.resultInput, DomainId, Input, Page, PageSize, objFilter, , , , , ,Blacklists)
+	}
+	Return sc
 ]]></Implementation>
 </Method>
 

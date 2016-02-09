@@ -47,6 +47,21 @@ Restore the member back to the set, (after being removed earlier from the set)</
 ]]></Implementation>
 </Method>
 
+<Method name="ApproveMemberInSet">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,Member</FormalSpec>
+<Implementation><![CDATA[
+	Set $List(^iKnow.SetAnalysis(ProjectId, Set, "P", Member),3)=1
+	&sql(Select ID Into :SetId From iKnow_SetAnalysis.Sets 
+	     Where (ProjectId = :ProjectId) And (Name = :Set))
+	If SQLCODE=0 {
+		&sql(Update iKnow_SetAnalysis.SetMembers Set Approved = 1
+			 Where (SetId = :SetId) And (Member = :Member))
+	}
+	;set ^dwapprove=$lb(ProjectId,Set,Member)
+]]></Implementation>
+</Method>
+
 <Method name="RemoveSentenceFromSet">
 <ClassMethod>1</ClassMethod>
 <FormalSpec>ProjectId,Set,sentId,srcId</FormalSpec>
@@ -270,7 +285,7 @@ Remove a set from disk</Description>
 <Description>
 Save a set to disk</Description>
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[ProjectId,metadataField,SaveSet:%String,Definition:%String,entities:%String,isMerge:%Boolean,&filters:%String,resultPtr:%String,&blacklistmembers:%String,DeepSeeEnabled:%Boolean,RestEnabled:%Boolean,SetDescription:%String=""]]></FormalSpec>
+<FormalSpec><![CDATA[ProjectId,metadataField,SaveSet:%String,Definition:%String,entities:%String,isMerge:%Boolean,&filters:%String,resultPtr:%String,&blacklistmembers:%String,DeepSeeEnabled:%Boolean,RestEnabled:%Boolean,SetDescription:%String="",EntityFilters:%String=""]]></FormalSpec>
 <ReturnType>%Boolean</ReturnType>
 <Implementation><![CDATA[
 
@@ -284,6 +299,18 @@ Save a set to disk</Description>
 	                                             or $lb(2,, "SETA,SETB,...")  (score)
 	;'F' : Filters of the set
 	^iKnow.SetAnalysis(ProjectId, SetName, "F", inc) = $lb(metafield,operator,value,displayvalue)
+	;'EF' : Entity Filters of the set
+	^iKnow.SetAnalysis(ProjectId, SetName, "EF", inc) = $lb(action, formula)
+	action : SELECT, UNSELECT, REMOVE
+	formula : e.g. (NEGATION = FALSE) AND (HEADER <> ANAMNESE)
+	          e.g. (ENTITY = PCM*) OR (ENTITY = PCO2*)
+	          e.g. (ENTITY = *)
+	Entity formulas work on the output of the plugin, and automate seleting or deselecting (or removing) entities
+	the entity formulas will be executed in the order of entry :
+	e.g. 1 REMOVE: (PCM*)
+	     2 SELECT: (ENTITY = *)
+	     3 UNSELECT: NEGATION = TRUE
+	     4 UNSELECT: (ENTITY = PCO2*)
 	;'E' : selected entities/plugin values of the set
 	^iKnow.SetAnalysis(ProjectId, SetName, "E", entityValue) = EntityId
 	;'X' : selected and non-selected entities
@@ -331,6 +358,13 @@ Save a set to disk</Description>
 		Set iFilter=$Order(filters(iFilter)) If iFilter="" Quit
 		Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "F", $i(^iKnow.SetAnalysis(ProjectId, SaveSet, "F"))) = filters(iFilter)
 	}
+
+	Kill ^iKnow.SetAnalysis(ProjectId, SaveSet, "EF")
+	Set iEFilter="" For {
+		Set iEFilter=$Order(EntityFilters(iEFilter)) If iEFilter="" Quit
+		Set ^iKnow.SetAnalysis(ProjectId, SaveSet, "EF", $i(^iKnow.SetAnalysis(ProjectId, SaveSet, "EF"))) = EntityFilters(iEFilter)
+	}
+
  	;or resultEnt(iSort,entityId)
  	;or resultEnt(iSort,$list(entityId))
  	;or resultEnt(iSort,#,entityId)
@@ -740,7 +774,7 @@ Re-calculate all sets that depend on a given set</Description>
 <Description>
 Return all entities for a saved set</Description>
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[ProjectId,*resultPtr:%String,*selEntSet,FromSet:%String,&filters:%String,Definition:%String,&blacklistmembers:%String,&DeepSeeEnabled:%Boolean,&RestEnabled:%Boolean,&SetDescription:%String]]></FormalSpec>
+<FormalSpec><![CDATA[ProjectId,*resultPtr:%String,*selEntSet,FromSet:%String,&filters:%String,Definition:%String,&blacklistmembers:%String,&DeepSeeEnabled:%Boolean,&RestEnabled:%Boolean,&SetDescription:%String,&EntityFilters:%String]]></FormalSpec>
 <Implementation><![CDATA[
 	Set resultPtr=$i(^iKnow.SetAnalysisTemp)
 	;use saved set to set 'selected' options:
@@ -756,6 +790,10 @@ Return all entities for a saved set</Description>
 		Do ..BuildFilter(DomainId, $List(FilterData,1), $List(FilterData,2), $List(FilterData,3), .objFilter)
 	}
 
+	Kill EntityFilters
+	Merge EntityFilters = ^iKnow.SetAnalysis(ProjectId, FromSet, "EF")
+	Set EntityFilters=1
+	Set EntityFilters(1)=$lb("SELECT","")
 	Set Definition=$Get(^iKnow.SetAnalysis(ProjectId,FromSet, "D", 1))
 	Set DeepSeeEnabled = +$ListGet(Definition, 5)
 	Set RestEnabled = +$ListGet(Definition, 6)
@@ -766,11 +804,25 @@ Return all entities for a saved set</Description>
 	Set IsUpToDate = +$ListGet(Definition, 9) 
 	set ^dwdebug($i(^dwdebug))=IsUpToDate
 	If IsBatch ! IsUpToDate { 
+		Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		Set TermType="ENTITY"
+		Set PluginId=$List(Definition,2)
+		&sql(Select TermType Into :TermType From iKnow.SetAnalysisPlugin Where ID = :PluginId)
+		If SQLCODE'=0 Set TermType="ENTITY"
 		Set Value="" For iCount=1:1 {
 			Set Value=$Order(^iKnow.SetAnalysis(ProjectId,FromSet,"X",Value),1,Id) If Value="" Quit
 			Set Freq=1  ;should get freq from iKnow
+			;get plugin and termtype
+			;depending on termtype, get frequency :
+			If TermType="ENTITY" {
+				Set EntityId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Value)
+				If EntityId'="" Set Freq=##class(%iKnow.Queries.EntityAPI).GetFrequency(DomainId, EntityId)
+			} elseif TermType="CRC" {
+				Set CrcId=##class(%iKnow.Queries.CrcAPI).GetId(DomainId, $Piece(Value,"|",1), $Piece(Value,"|",2), $Piece(Value,"|",3))
+				If CrcId'="" Set Freq=##class(%iKnow.Queries.CrcAPI).GetFrequency(DomainId, CrcId)
+			}
 			Set sort=" "_$J(99999999-Freq,8)_$ZCVT(Value,"U")
-			Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,Id)=$ListBuild(Value)
+			Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,Id)=$ListBuild(Value_" [ "_Freq_" ]")
 			Set inEntSet=inEntSet+1
 		}
 		Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=inEntSet
@@ -888,6 +940,7 @@ Return all entities for a saved set</Description>
 <ClassMethod>1</ClassMethod>
 <FormalSpec>ProjectId,SessionSet,SetFilter="",Tab="detail"</FormalSpec>
 <Implementation><![CDATA[
+	kill ^dwdebug merge ^dwdebug=SessionSet
 	#Dim PrevPackages, Packages, Package, Set, SubPackage, FirstDef, ThisDef, Member, filterdata as %String
 	#Dim SetRepositories, SetRepClass, FullSetName, SetName, SetNameDisplayed as %String
 	#Dim iPackage, jPackage, iCol, iDef, iCount, iFilter, iSetRep as %Integer
@@ -1111,18 +1164,19 @@ Return all entities for a saved set</Description>
 								Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detail&set=",$$$OUT(Set),"&type=P'><img src='plus.gif' border=0></a>&nbsp;"
 							}
 						}
-					
-						Set Pat="" For iCount=0:1 {
-							set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat)) If Pat="" Quit
-							If iCount>4,'$Get(SessionSet(Set,"P")) Quit
-							Do ..OutputPat(ProjectId,Set,Pat)
-						}
+						Set Sort=1
+						Do ..OutputPatients(ProjectId, Set, $S('$Get(SessionSet(Set,"P")):5,1:""), +$Get(SessionSet(Set,"SORT")))
 					}
 				}			
 
 				if iCount>0 {
 					Write "&nbsp;<a href='iKnowSetAnalysisExport.csp?action=export&set=",$$$OUT(Set),"&type=P'><img src='excel.gif' border=0 title='export this metadatfield for all members to excel'></a>"
 					Write "&nbsp;<a href='iKnowSetAnalysisExport.csp?action=exportall&set=",$$$OUT(Set),"&type=P'><img src='excelplus.gif' border=0 title='export all metadatafields for all members to excel'></a>"
+					If $Get(SessionSet(Set,"SORT")) {
+						Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detailsortpat&set=",$$$OUT(Set),"'><img src='redlight.png' border=0 title='order from negated to none' width='5' height='14'></a>"
+					} else {
+						Write "&nbsp;<a href='iKnowSetAnalysis.csp?action=detailsortred&set=",$$$OUT(Set),"'><img src='redlight.png' border=0 title='order from negated to none' width='5' height='14'></a>"
+					}
 				}
 			}
 			If DisplaySection Do ..OutputPatFooter()
@@ -1150,14 +1204,54 @@ Return all entities for a saved set</Description>
 ]]></Implementation>
 </Method>
 
-<Method name="OutputPat">
+<Method name="SortPatients">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[ProjectId,Set,&SortPat]]></FormalSpec>
+<Implementation><![CDATA[
+	Set Pat="" For iCount=0:1 {
+		set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat)) If Pat="" Quit
+		Set Negation = ..Negated(ProjectId, Set, Pat)
+		Set Sort(Negation, Pat) = ""
+	}
+	Kill SortPat
+	For Negation = 2,1,0 {
+		Set Pat="" For i=0:1 {
+			Set Pat=$Order(Sort(Negation, Pat)) If Pat="" Quit
+			Set SortPat(0,$I(SortPat))=$LB(Pat,Negation)
+			Set SortPat("P",Pat)=SortPat
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="OutputPatients">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,MaxCount,Sort</FormalSpec>
+<Implementation><![CDATA[
+	If Sort {
+		Do ..SortPatients(ProjectId, Set, .SortPat)
+		For iCount=1:1:+SortPat {
+			If MaxCount'="",iCount>MaxCount Quit
+			Set Pat=$List(SortPat(0,iCount),1),Negation=$List(SortPat(0,iCount),2)
+			Do ..OutputPat(ProjectId,Set,Pat,Negation)
+		}
+	} else {
+		Set Pat="" For iCount=0:1 {
+			set Pat=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat)) If Pat="" Quit
+			If MaxCount'="",iCount>MaxCount Quit
+			Do ..OutputPat(ProjectId,Set,Pat,..Negated(ProjectId, Set, Pat))
+		}
+	}
+]]></Implementation>
+</Method>
+
+<Method name="Negated">
 <ClassMethod>1</ClassMethod>
 <FormalSpec>ProjectId,Set,Pat</FormalSpec>
+<ReturnType>%Integer</ReturnType>
 <Implementation><![CDATA[
-	Set URLOut="<a href='iKnowSetAnalysisDetail.csp?action=sentences&set="_$$$OUT(Set)_"&metavalue="_Pat_"' onclick=""Popup(this.href);return false"">"
-	Write URLOut
-	Set Negation=""
-	Set SrcId=""
+	#Dim Negation as %Integer = ""
+	#Dim SrcId as %String = ""
 	For {
 		Set SrcId=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat,SrcId)) If SrcId="" Quit
 		If ^iKnow.SetAnalysis(ProjectId,Set,"P",Pat,SrcId)=2 {
@@ -1170,11 +1264,27 @@ Return all entities for a saved set</Description>
 			If Negation="" Set Negation=0
 		}
 	}
-	Write $Select(Negation=2:"<span class='all_negation'>",Negation:"<span class='some_negation'>",1:"<span class='no_negation'>"),Pat,"</span>"
+	Quit Negation
+]]></Implementation>
+</Method>
+
+<Method name="OutputPat">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,Set,Pat,Negation:%Integer=0</FormalSpec>
+<Implementation><![CDATA[
+	Set URLOut="<a href='iKnowSetAnalysisDetail.csp?action=sentences&set="_$$$OUT(Set)_"&metavalue="_Pat_"' onclick=""Popup(this.href);return false"">"
+	Write URLOut
 	Set Score=$Get(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat))
+	Set Approved=0
 	If $ListValid(Score),$LL(Score)>0 {
-		Set Score=$List(Score,1)
+		Set Approved=+$ListGet(Score,3)
+		Set Score=$ListGet(Score,1)
 	}
+	Write $Select(Negation=2:"<span class='all_negation'>",Negation:"<span class='some_negation'>",1:"<span class='no_negation'>")
+	If Approved Write "<span class='approved'>"
+	Write Pat
+	If Approved Write "</span>"
+	Write "</span>"
 	If Score>0 Write "[",Score,"]"
 	Write "</a>"
 	if $Order(^iKnow.SetAnalysis(ProjectId,Set,"P",Pat))'="" write ", "
@@ -1189,8 +1299,17 @@ Return all entities for a saved set</Description>
 	If ProjectId="" Quit
 	Write "<table  id='gradient-style'>"
 
-	Set prevMetavalue=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue),-1)
-	Set nextMetavalue=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue))
+	Merge SortPat=%session.Data("sortpatients", Set)
+	Set iPat=$Get(SortPat("P",metavalue))
+	If iPat'="" {
+		Set iprev=$Order(SortPat(0,iPat),-1)
+		Set prevMetavalue=$S(iprev="":"",1:$List(SortPat(0,iprev),1))
+		Set inext=$Order(SortPat(0,iPat))
+		Set nextMetavalue=$S(inext="":"",1:$List(SortPat(0,inext),1))
+	} else {
+		Set prevMetavalue=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue),-1)
+		Set nextMetavalue=$Order(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue))
+	}
 	If (prevMetavalue_nextMetavalue)'="" {
 		Write "<tr>"
 		Write "<td style='text-align: left;'>"
@@ -1248,7 +1367,7 @@ Return all entities for a saved set</Description>
 		write metavalue
 		Set Score=$Get(^iKnow.SetAnalysis(ProjectId,Set,"P",metavalue))
 		If $ListValid(Score),$LL(Score)>0 {
-			If $List(Score,1)>0 {
+			If $ListGet(Score,1)>0 {
 				Write " (score : "_$List(Score,1)_", sets : "
 				For iScoreSet=1:1:$LL($List(Score,2)) {
 					Write $List($List(Score,2),iScoreSet)
@@ -1269,6 +1388,7 @@ Return all entities for a saved set</Description>
 			Write "<a href='iKnowSetAnalysisDetail.csp?action=restore&set=",$$$OUT(Set),"&metavalue=",metavalue,"' >[restore to set]</a>"
 			Set MemberType="PXX"  ;to do : do not display PX !
 		}
+		Write "&nbsp;&nbsp;<a href='iKnowSetAnalysisDetail.csp?action=approve&set=",$$$OUT(Set),"&metavalue=",metavalue,"' >[approve]</a>"
 
 		write "</td></tr>"
 
@@ -1291,13 +1411,17 @@ Return all entities for a saved set</Description>
 		}
 		Set srcId="" For {
 			Set srcId=$Order(Sources(srcId)) If srcId="" Quit
+			Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.resultSent, DomainId, srcId, 0)
 			Set sentId="" For iFirst=1:1 {
   				Set sentId=$Order(^iKnow.SetAnalysis(ProjectId, Set, MemberType, metavalue, srcId, sentId)) If sentId="" Quit
+				Set Order="" For {
+					Set Order=$Order(resultSent(Order),1,sentData) If (Order="")!($List(sentData,1)=sentId) Quit
+				}
 				Write !,"<tr valign='top'><td>"
 				If iFirst=1 Write srcId_" <a id='sourceText"_srcId_"' href=""javascript:toggle('sourceText"_srcId_"','sourceBlock"_srcId_"','",srcId,"');"">show</a>"
 				Write "</td><td>",!
 				Set terms=..GetAllTerms(ProjectId, Set)
-				Do ..OutputSentence(DomainId, sentId, .terms, TermType)
+				Do ..OutputSentence(DomainId, sentId, .terms, TermType, Order)
 				Write "<a href='iKnowSetAnalysisDetail.csp?action=removesent&set=",$$$OUT(Set),"&src="_srcId_"&sent="_sentId,"&metavalue=",metavalue,"'>[-]</a>"
 				Write "</td></tr>",!
 			}
@@ -1310,7 +1434,6 @@ Return all entities for a saved set</Description>
 
 			//Do ##class(%iKnow.Queries.SourceAPI).GetSummary(.result, DomainId, srcId, 9999)
 			
-			Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.resultSent, DomainId, srcId, 0)
 			If AllSources {  ;Sources(srcId)=1 {
 				write "<tr><td colspan=2><div id='sourceBlock",srcId,"' style='display: block'>"
 			} else {
@@ -1321,7 +1444,8 @@ Return all entities for a saved set</Description>
 			write !,"<tr><td>"
 			Set iSent="" For {
 				Set iSent=$Order(resultSent(iSent)) If iSent="" Quit
-				Do ..OutputSentence(DomainId, $List(resultSent(iSent),1), .terms, TermType)
+				Do ..OutputSentence(DomainId, $List(resultSent(iSent),1), .terms, TermType, iSent)
+				Write "<br>"
 			}
 
 
@@ -1377,8 +1501,10 @@ Return all entities for a saved set</Description>
 
 <Method name="OutputSentence">
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[domainId,sentId,&terms,termType="ENTITY"]]></FormalSpec>
-<Implementation><![CDATA[	Write ..GetSentence(domainId, sentId, .terms, termType)
+<FormalSpec><![CDATA[domainId,sentId,&terms,termType="ENTITY",order:%Integer=""]]></FormalSpec>
+<Implementation><![CDATA[
+	If order'="" Write "#"_order_" : "
+	Write ..GetSentence(domainId, sentId, .terms, termType)
 ]]></Implementation>
 </Method>
 
@@ -1615,7 +1741,7 @@ Formula : change filter in set of patients</Description>
 <FormalSpec><![CDATA[ProjectId,Set,Formula:%String,deepseeEnabled:%Boolean,restEnabled:%Boolean,executedFromTop:%Boolean=0,SetDescription:%String="",&OnlyDependencies:%String=0]]></FormalSpec>
 <ReturnType>%String</ReturnType>
 <Implementation><![CDATA[
-	#Dim Prev,Error,First,Next,FirstE,NextE,Char, Oper, pubProjectId, pubSetName as %String
+	#Dim Prev,Error,First,Next,FirstE,NextE,Char, Oper, OperParam, pubProjectId, pubSetName as %String
 	#Dim Negate, Level,iForm,thisProjectId as %Integer
 	#Dim form as %String
 	If $E($ZCVT(Formula,"U"),1,6)="SCORE " Do ..Score(ProjectId, Set, Formula, .OnlyDependencies) Quit ""
@@ -1667,16 +1793,23 @@ Formula : change filter in set of patients</Description>
 					} elseif Oper = "ANDNOTSENTENCE" {
 						Do ..AndNotSentenceSet(.First, .First, .Next)
 						Do ..AndNotSentenceSet(.FirstE, .FirstE, .NextE)
+					} elseif Oper = "ANDSENTENCE" {
+						Do ..AndSentenceSet(.First, .First, .Next, OperParam)
+						Do ..AndSentenceSet(.FirstE, .FirstE, .NextE, OperParam)
+					} elseif Oper = "ANDSENTENCEORDER" {
+						Do ..AndSentenceSet(.First, .First, .Next, OperParam, 1)
+						Do ..AndSentenceSet(.FirstE, .FirstE, .NextE, OperParam, 1)
 					} else {
 						Do ..OrSet(.First, .First, .Next)
 						Do ..OrSet(.FirstE, .FirstE, .NextE)
 					}
-					Set Oper=""
+					Set Oper="",OperParam=""
 					Set Next=""
 				}
 					
 				Set Prev="",Negate=0 ;todo : not (...)
 			} else {
+				//TODO : what if there is a space, and next chars are alfa (not AND, OR, 
 				Set Error = "'"_Prev_"' is not a Set"
 				Quit
 			}
@@ -1692,21 +1825,40 @@ Formula : change filter in set of patients</Description>
 		} elseif $ZCVT($E(Formula,iForm-1,iForm+2),"U")=" OR " {
 			Set iForm=iForm+1
 			Set Oper="OR"
+			Set OperParam=""
 		} elseif $ZCVT($E(Formula,iForm-1,iForm+3),"U")=" AND " {
 			Set iForm=iForm+2
 			Set Oper="AND"
+			Set OperParam=""
 		} elseif $ZCVT($E(Formula,iForm-1,iForm+6),"U")=" ANDNOT " {
 			Set iForm=iForm+5
 			Set Oper="ANDNOT"
+			Set OperParam=""
 		} elseif $ZCVT($E(Formula,iForm-1,iForm+12),"U")=" ANDNOTSOURCE " {
 			Set iForm=iForm+11
 			Set Oper="ANDNOTSOURCE"
+			Set OperParam=""
 		} elseif $ZCVT($E(Formula,iForm-1,iForm+14),"U")=" ANDNOTSENTENCE " {
 			Set iForm=iForm+13
 			Set Oper="ANDNOTSENTENCE"
+			Set OperParam=""
+		} elseif $ZCVT($E(Formula,iForm-1,*),"U")?1" ANDSENTENCE".N1" ".E {
+			Set Numerics=$P($E(Formula,iForm+11,*)," ",1)
+			Set OperParam=Numerics
+			Set iForm=iForm+10+$Length(Numerics)
+			Set Oper="ANDSENTENCE"
+		} elseif $ZCVT($E(Formula,iForm-1,*),"U")?1" ANDSENTENCEORDER".N1" ".E {
+			Set Numerics=$P($E(Formula,iForm+16,*)," ",1)
+			Set OperParam=Numerics
+			Set iForm=iForm+15+$Length(Numerics)
+			Set Oper="ANDSENTENCEORDER"
 		} elseif $ZCVT($E(Formula,iForm-1,iForm+3),"U")=" NOT " {
 			Set iForm=iForm+2
 			Set Negate=1
+		} elseif Char="""" {
+			Set iQuote=$Find(Formula, """", iForm+1)
+			Set Prev=$Extract(Formula, iForm+1, iQuote-2)
+			Set iForm=iQuote-1
 		} else {
 			Set Prev=Prev_Char
 		}
@@ -1751,7 +1903,9 @@ Formula : change filter in set of patients</Description>
 			;Type = "E" : too much to handle !!
 		}
 	} else {
-		Merge InSet = ^iKnow.SetAnalysis(ProjectId,FromSet, Type)
+		Merge InSet = ^iKnow.SetAnalysis(ProjectId, FromSet, Type)
+		Set DomainId = ##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+		Set InSet = $LB(ProjectId, FromSet, Type, DomainId)
 	}
 ]]></Implementation>
 </Method>
@@ -1780,6 +1934,110 @@ Formula : change filter in set of patients</Description>
 
 	Kill InSet
 	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="AndSentenceSet">
+<Description>
+SentenceDiff :
+ = 0 : concepts must be found in same sentence,
+ = n : concepts must be found in sentences maximum 'n' lines from each other
+InOrder : if InOrder, than concepts of different sets should be in the same order in the sencence</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>InSet:%String,Set1,Set2,SentenceDiff,InOrder:%Boolean=0</FormalSpec>
+<Implementation><![CDATA[
+	Kill TempSet
+	Set TempSet=1
+	Merge ^dworder(1)=Set1
+	Merge ^dworder(2)=Set2
+	Set DomainId=$List(Set1,4)
+	Set iSet="" For  {
+		Set iSet=$Order(Set1(iSet)) If iSet="" Quit
+		If $Data(Set2(iSet)) {
+			Set src=""
+			For {
+				Set src=$order(Set1(iSet,src)) If src="" Quit
+				If $Data(Set2(iSet,src)) {
+					If SentenceDiff>0 {
+						;get all sentences for src, to calculate the distance later between two sentences
+						Do ##class(%iKnow.Queries.SentenceAPI).GetBySource(.resultSent, DomainId, src, 0)
+						Set iSent=""
+						For {
+							Set iSent=$Order(resultSent(iSent),1,data) If iSent="" Quit
+							Set Sentences("S",$List(data,1))=iSent
+							Set Sentences(0,iSent)=$List(data,1)
+							Kill resultSent(iSent)
+						}
+					}
+					Set sent=""
+					For {
+						Set sent=$order(Set1(iSet,src,sent)) If sent="" Quit
+						If SentenceDiff>0 {
+							;get all sentenceId's in SentenceDiff range around Sent
+							;if one of them exists in Set2 -> merge both id's in TempSet
+							Set iSent=$Get(Sentences("S",sent))
+							If iSent'="" {
+								;get id's between sent and SentenceDiff and look in Set2
+								For iDistance=1:1:SentenceDiff,-SentenceDiff:1:-1 {
+									If InOrder,iDistance<0 Quit  ;sentence concept Set1 < sentence concept Set2
+									Set sentDist=$Get(Sentences(0,iSent+iDistance))
+									If sentDist'="",$Data(Set2(iSet,src,sentDist)) {
+										Merge TempSet(iSet,src,sent)=Set1(iSet,src,sent)
+										If $Data(Set1(iSet,src))#2 Set TempSet(iSet,src)=Set1(iSet,src)
+										If $Data(Set1(iSet))#2 Set TempSet(iSet)=Set1(iSet)
+										Merge TempSet(iSet,src,sentDist)=Set2(iSet,src,sentDist)
+									}
+								}
+							}
+						}
+						//also test for same sentence (only order test if same sentence) :
+						If $Data(Set2(iSet,src,sent)),('InOrder!..SentenceInSetOrder(DomainId,iSet,src,sent,$Get(Set1),$Get(Set2))) {
+							Merge TempSet(iSet,src,sent)=Set1(iSet,src,sent)
+							If $Data(Set1(iSet,src))#2 Set TempSet(iSet,src)=Set1(iSet,src)
+							If $Data(Set1(iSet))#2 Set TempSet(iSet)=Set1(iSet)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	Kill InSet
+	Merge InSet=TempSet
+]]></Implementation>
+</Method>
+
+<Method name="SentenceInSetOrder">
+<Description>
+concepts should be in the correct order in the sentence</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId,Member,Src,SentenceId,Set1Detail,Set2Detail</FormalSpec>
+<Implementation><![CDATA[
+	set ^dwsentence($i(^dwsentence))=$lb(DomainId, Member, Src, SentenceId,Set1Detail,Set2Detail)
+	;get the source for the sentence
+	;split sentence in concepts (or crc's?)
+	Set sc = ##class(%iKnow.Queries.SentenceAPI).GetParts(.result, DomainId, SentenceId)
+	;result(i)=$lb(occid, entid, value)
+	;todo       detect concepts for Set1 and Set2 (what if set is formula on other sets ?)
+	Set ProjectId = $List(Set1Detail, 1)
+	Set Set1 = $List(Set1Detail,2)  ;Type always = 'E' !, Type1=$List(Set1Detail,3)
+	Set Set2 = $List(Set2Detail,2)  ;                   , Type2=$List(Set2Detail,3)
+	Set iOrder=""
+	For {
+		Set iOrder=$Order(result(iOrder),1,data) If iOrder="" Quit
+		Set Entity=$List(data,3)
+		If Entity'="" {
+			If $Data(^iKnow.SetAnalysis(ProjectId, Set1, "E", Entity)) Set Order(1,iOrder)=""
+			If $Data(^iKnow.SetAnalysis(ProjectId, Set2, "E", Entity)) Set Order(2,iOrder)=""
+		}
+	}
+	;       check order of concept Set1 < concept Set2
+	Set iOrder="",Ok=0
+	For {
+		Set iOrder = $Order(Order(1,iOrder)) If iOrder="" Quit
+		If $Order(Order(2,iOrder))'="" Set Ok=1  //found concept in Set1 < concept in Set2
+	}
+	Quit Ok
 ]]></Implementation>
 </Method>
 

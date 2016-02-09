@@ -70,12 +70,14 @@ Order in which they appear in dropdown lists</Description>
 <Description><![CDATA[
 Each derived plugin should override & implement 4 methods : GetPlugin, GetPluginValue, GetPluginId, SetPluginMembers]]></Description>
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set sc=$$$OK
+ 	Do ..GetPageSize(.Page,.PageSize, Batch)
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
-	If +Input=0 Set Input=500  ;default top
+	If +Input=0 Set Input=PageSize
 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
 	Set sc = ##class(%iKnow.Queries.EntityAPI).GetTop(.result, DomainId, 1, +Input, objFilter,,,,,Blacklists)
 

@@ -131,11 +131,15 @@ input {
 }
 .some_negation {
   color:orange;
-  font-weight:bold;
+ /* font-weight:bold;*/
 }
 .all_negation {
   color:#ff0000;
 /*  font-weight:bold; */
+}
+.approved {
+/*  font-weight:bold; */
+  color:green;
 }
 .tabs ul {
 		list-style: none;

@@ -87,6 +87,10 @@ if true, there will be no execute or select box</Description>
 <Type>%Boolean</Type>
 </Property>
 
+<Property name="PageSize">
+<Type>%String</Type>
+</Property>
+
 <Index name="IdxName">
 <Properties>Name</Properties>
 <Unique>1</Unique>
@@ -161,6 +165,10 @@ Order in which they appear in dropdown lists</Description>
 <Default>1</Default>
 </Parameter>
 
+<Parameter name="PageSize">
+<Default>0</Default>
+</Parameter>
+
 <Method name="Create">
 <ClassMethod>1</ClassMethod>
 <ReturnType>%Status</ReturnType>
@@ -194,6 +202,7 @@ Order in which they appear in dropdown lists</Description>
 		Set objPlugin.InputPlaceholder   = obj.#InputPlaceholder
 		Set objPlugin.ClassName          = obj.%PackageName()_"."_obj.%ClassName()
 		Set objPlugin.Enabled            = obj.#Enabled
+		Set objPlugin.PageSize           = obj.#PageSize
 		Set objPlugin.DisableManualSelection = obj.#DisableManualSelection
 		Set sc = objPlugin.%Save()
 		If sc'=$$$OK Do $SYSTEM.Status.DisplayError(sc) Set Status=sc
@@ -211,7 +220,7 @@ Order in which they appear in dropdown lists</Description>
 	Kill ActionList
 	Set ActionList=0
 	Set objSQLStatement=##class(%SQL.Statement).%New()
-	Set Sql = "Select Id, Name, InputLabel, InputSize, iKnowDomain, InputSet, SetLabel, Metafield, ShortDescription, InputPattern, InputPlaceholder, Order, DisableManualSelection From iKnow.SetAnalysisPlugin Where Enabled = 1 Order By Order,Name"
+	Set Sql = "Select Id, Name, InputLabel, InputSize, iKnowDomain, InputSet, SetLabel, Metafield, ShortDescription, InputPattern, InputPlaceholder, Order, DisableManualSelection, PageSize From iKnow.SetAnalysisPlugin Where Enabled = 1 Order By Order,Name"
 	If Help Set Sql = "Select Id, Name, ShortDescription, LongDescription From iKnow.SetAnalysisPlugin Where Enabled = 1"
 	Set sc = objSQLStatement.%Prepare(Sql)
 	Set objResult = objSQLStatement.%Execute()
@@ -230,7 +239,7 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="Execute">
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String="",&Filters:%String,objFilter:%String="",&resultPtr:%String,Batch:%Boolean=0,Blacklists:%String=""]]></FormalSpec>
+<FormalSpec><![CDATA[PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String="",&Filters:%String,objFilter:%String="",&resultPtr:%String,Batch:%Boolean=0,Blacklists:%String="",PageSize:%String=""]]></FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
 	#Dim DomainId as %Integer
@@ -249,7 +258,7 @@ Order in which they appear in dropdown lists</Description>
 		}
 	}
 	If Batch = 0 {
-		Set Ok = $ClassMethod(PluginClass, "GetPlugin", PluginId, ProjectId, Input, InputPattern, InputSet, objFilter, .resultPtr, Blacklists)
+		Set Ok = $ClassMethod(PluginClass, "GetPlugin", PluginId, ProjectId, Input, InputPattern, InputSet, objFilter, .resultPtr, Blacklists, 0, PageSize)
 	} Else {
 		Do ##class(iKnow.SetAnalysis.Batches).CreateBatch(ProjectId, .BatchId, .BatchName)
 		Set ^iKnow.SetAnalysis(ProjectId, BatchName) = $ListBuild(BatchId)
@@ -259,7 +268,7 @@ Order in which they appear in dropdown lists</Description>
 			Set iFilter=$Order(Filters(iFilter),1,FilterData) If iFilter="" Quit
 			Set ^iKnow.SetAnalysis(ProjectId, BatchName, "F", inc) = FilterData
   		}
-		Job ..Batch(BatchId,BatchName,PluginId,PluginClass, ProjectId, Input, InputPattern, InputSet, objFilter, Blacklists)::1
+		Job ..Batch(BatchId,BatchName,PluginId,PluginClass, ProjectId, Input, InputPattern, InputSet, objFilter, Blacklists, PageSize)::1
 		Set Ok=$Test
 		If 'Ok Do ##class(iKnow.SetAnalysis.Batches).SetError(ProjectId, BatchId, "No Job")
 	}
@@ -269,11 +278,11 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="Batch">
 <ClassMethod>1</ClassMethod>
-<FormalSpec>BatchId:%Integer,BatchName:%String,PluginId:%Integer,PluginClass:%String,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>BatchId:%Integer,BatchName:%String,PluginId:%Integer,PluginClass:%String,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,Blacklists:%String="",PageSize:%String=""</FormalSpec>
 <Implementation><![CDATA[
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
 	Try {
-		Do $ClassMethod(PluginClass, "GetPlugin", PluginId, ProjectId, Input, InputPattern, InputSet, objFilter, .resultPtr)
+		Do $ClassMethod(PluginClass, "GetPlugin", PluginId, ProjectId, Input, InputPattern, InputSet, objFilter, .resultPtr, Blacklists, 1, PageSize)
 		;save resultEnt in a BatchSet
 		;resultEnt(sort, "ent id")=ent value
 		;resultPtr:^iKnow.SetAnalysisTemp(resultPtr,"S",sort,id)=value
@@ -398,7 +407,7 @@ Param1 = ProjectId or resultPtr</Description>
 Each derived plugin should override & implement 4 methods : GetPlugin, GetPluginValue, GetPluginId, SetPluginMembers]]></Description>
 <Abstract>1</Abstract>
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[	Quit $$$OK
 ]]></Implementation>
@@ -426,6 +435,22 @@ Each derived plugin should override & implement 4 methods : GetPlugin, GetPlugin
 <Abstract>1</Abstract>
 <ClassMethod>1</ClassMethod>
 <FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+</Method>
+
+<Method name="GetPageSize">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&Page:%Integer,&PageSize:%Integer,Batch:%Boolean=0,paramPageSize:%String="",Default:%String=500]]></FormalSpec>
+<Implementation><![CDATA[
+	If paramPageSize'="" {
+		Set Page = 1
+	} elseIf Batch {
+		Set Page = 0, PageSize = ""
+	} else {
+		Set Page=1, PageSize=Default
+	}
+	;TODO : cutoff in plugin : e.g. upto frequency x
+	;       paging on UI     : first page 500, button to get more values
+]]></Implementation>
 </Method>
 
 <UDLText name="T">
@@ -474,31 +499,31 @@ Each derived plugin should override & implement 4 methods : GetPlugin, GetPlugin
 <FormalSpec>TermType,ProjectId,SaveSet,DomainId,Value,srcId,entityList</FormalSpec>
 <Implementation><![CDATA[
  
-		Set EntityListForNegation=entityList
+	Set EntityListForNegation=entityList
 
-		If TermType="ENTITY" {
-			set sc = ##class(%iKnow.Queries.SentenceAPI).GetByEntityIds(.resultSent, DomainId, entityList, $lb(srcId),0)
-		} elseif TermType="CRC" {
-			set sc = ##class(%iKnow.Queries.SentenceAPI).GetByCrcIds(.resultSent, DomainId, entityList, $lb(srcId),0)
-			Set EntityListForNegation=""
-			For iEntityListForNegation=1:1:$ListLength(entityList) {
-				Set tempList=##class(%iKnow.Queries.CrcAPI).GetValue(DomainId,$List(entityList,iEntityListForNegation))
-				;get id's for tempList
-				Set tempListOut=""
-				For i=1:1:$ListLength(tempList) {
-					Set tempListOut=tempListOut_$listbuild(##class(%iKnow.Queries.EntityAPI).GetId(DomainId, $list(tempList,i)))
-				}
-				Set EntityListForNegation=EntityListForNegation_tempListOut
+	If TermType="ENTITY" {
+		set sc = ##class(%iKnow.Queries.SentenceAPI).GetByEntityIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+	} elseif TermType="CRC" {
+		set sc = ##class(%iKnow.Queries.SentenceAPI).GetByCrcIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+		Set EntityListForNegation=""
+		For iEntityListForNegation=1:1:$ListLength(entityList) {
+			Set tempList=##class(%iKnow.Queries.CrcAPI).GetValue(DomainId,$List(entityList,iEntityListForNegation))
+			;get id's for tempList
+			Set tempListOut=""
+			For i=1:1:$ListLength(tempList) {
+				Set tempListOut=tempListOut_$listbuild(##class(%iKnow.Queries.EntityAPI).GetId(DomainId, $list(tempList,i)))
 			}
-		} elseif TermType="PATH" {
-			set sc = ##class(%iKnow.Queries.SentenceAPI).GetByPathIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+			Set EntityListForNegation=EntityListForNegation_tempListOut
 		}
-		If Value'="" { 
-			Set iCount="" For  {
-				Set iCount=$Order(resultSent(iCount),1,dataSent) If iCount="" Quit
-				Set sentId=$list(dataSent,3)
-				Kill resultAttr
-				Do ##class(%iKnow.Queries.SentenceAPI).GetAttributes(.resultAttr, DomainId, sentId)
+	} elseif TermType="PATH" {
+		set sc = ##class(%iKnow.Queries.SentenceAPI).GetByPathIds(.resultSent, DomainId, entityList, $lb(srcId),0)
+	}
+	If Value'="" { 
+		Set iCount="" For  {
+			Set iCount=$Order(resultSent(iCount),1,dataSent) If iCount="" Quit
+			Set sentId=$list(dataSent,3)
+			Kill resultAttr
+			Do ##class(%iKnow.Queries.SentenceAPI).GetAttributes(.resultAttr, DomainId, sentId)
 				/*
 				or :
 
@@ -772,6 +797,9 @@ Example : find all entities with tnm classification :
 </Value>
 <Value name="23">
 <Value>DisableManualSelection</Value>
+</Value>
+<Value name="24">
+<Value>PageSize</Value>
 </Value>
 </Data>
 </Storage>

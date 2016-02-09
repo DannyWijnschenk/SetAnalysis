@@ -72,10 +72,12 @@ Order in which they appear in dropdown lists</Description>
 Example : find all entities with tnm classification :
          use Regex expression = .*t[0-4] ?n[0-3] ?m[1-4].*</Description>
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+ 	Do ..GetPageSize(.Page,.PageSize, Batch)
 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
 	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
 
@@ -84,7 +86,7 @@ Example : find all entities with tnm classification :
 
 	Try {
 		If $Get(InputSet)="" {  //do the regex on all concepts
-			Do ##class(%iKnow.Queries.EntityAPI).GetTop("^||Temp",DomainId,0)
+			Do ##class(%iKnow.Queries.EntityAPI).GetTop("^||Temp",DomainId, Page, PageSize)
 			Set resultEnt=$Get(resultEnt,0)
 			Set iCount="" For {
 				Set iCount=$Order(^||Temp(iCount),1,Data)

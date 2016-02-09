@@ -114,9 +114,11 @@ function makeSplitter()
 	write "    var savesetsection = document.getElementById(""savesetsection"");",!
 	write "    var saverulesection = document.getElementById(""saverulesection"");",!
 	write "    var selectelementssection = document.getElementById(""selectelementssection"");",!
+	write "    var pagesize = document.getElementById(""showpagesize"");",!
+	write "	   var pagesizelabel = document.getElementById(""showpagesizelabel"");",!
 
-	//      1    2     3           4          5           6         7          8        9             10            11                12     13
-	//Data:Id, Name, InputLabel, InputSize, iKnowDomain, InputSet, SetLabel, Metafield,Description, InputPattern, InputPlaceholder, Order, DisableManualSelection"
+	//      1    2     3           4          5           6         7          8        9             10            11                12     13                     14
+	//Data:Id, Name, InputLabel, InputSize, iKnowDomain, InputSet, SetLabel, Metafield,Description, InputPattern, InputPlaceholder, Order, DisableManualSelection, PageSize"
 	Do ##class(iKnow.SetAnalysisPlugin).GetActions(.ActionList)
 	Set iAction="" For {
 	  Set iAction=$order(ActionList(iAction),1,Data) If iAction="" Quit
@@ -159,6 +161,15 @@ function makeSplitter()
 		  write "      inputpatternlabel.style.display = ""none"";",!
 		  write "      inputpattern.style.display = ""none"";",!
 		  write "      inputpattern.selected = -1;"  ;todo: check
+	  }
+	  If $List(Data,14)'=0 {    //PageSize
+		  write "      pagesize.style.display = ""block"";",!
+		  write "      pagesizelabel.style.display = ""block"";",!
+		  write "      document.getElementById(""pagesize"").value = """_$List(Data,14)_""";"
+	  } else {
+		  write "      pagesize.style.display = ""none"";",!
+		  write "      pagesizelabel.style.display = ""none"";",!
+		  write "      document.getElementById(""pagesize"").value = """";",!
 	  }
 	  If $List(Data,13)=1 {   //TODO = 1 to hide execute & batch buttons
 	      write "      executebutton.style.display = ""none"";",!
@@ -324,6 +335,9 @@ function makeSplitter()
 		var elementOperator = document.getElementById("comboFormulaOperator");
 		var Operator = elementOperator.options[elementOperator.selectedIndex].text
 		var NewSet = x.options[x.selectedIndex].text;
+		if (NewSet.indexOf(' ') !== -1) {
+			NewSet = '"' + NewSet + '"';
+		}
 		//alert(NewSet);
 		if (Operator == 'extract') {
 		  txtFormula.value = Operator + ' ' + NewSet + ' RULE';
@@ -528,7 +542,7 @@ function selectLookupElement(value)
 			Set Elements=Elements_"<br>"
 		}
 
-		Do ##class(%iKnow.Queries.EntityAPI).GetSimilar(.Result,domainId,value,1,50,,,,blacklistIds)
+		Do ##class(%iKnow.Queries.EntityAPI).GetSimilar(.Result,domainId,value,1,30,,,,blacklistIds)
 		Set iResult="",iCount=0
 		Set Elements=Elements_"<table><tr><td>Entity</td><td>Frequency&nbsp;&nbsp;</td><td>Spread</td></tr>"
 		For {
@@ -608,7 +622,7 @@ function selectLookupElement(value)
 	try {
 		for i=1:1:$listlength(idxTypes) {
 			set idxType = $list(idxTypes,i)
-			&sql(declare curs cursor for select parent, name from %Dictionary.CompiledIndex where TypeClass=:idxType)
+			&sql(declare curs cursor for select parent, name from %Dictionary.CompiledIndex where parent > '%ZZZ' and TypeClass=:idxType)
 			&sql(open curs)
 			Set InnerHtml="<option>-- Select an existing iFind index (optional) --</option>"
 			for {
@@ -673,7 +687,7 @@ function selectLookupElement(value)
   Do ..Debug("action",action)
   set hideList=1,hidePat=1,hideRule=1
   set errorSave=""
-  
+  Set %session.AppTimeout = 3600  //1 hour timeout
   Set (projectName, projectId, domainName, domainId, metadataField) = ""
   
   If (action="CreateProject")&($system.Security.Check("SetAnalysis_CreateProject","U")) {
@@ -786,6 +800,17 @@ function selectLookupElement(value)
 	  Set Set=$ZCVT($Get(%request.Data("set",1)),"I","URL")
 	  Set Type=$Get(%request.Data("type",1))
 	  Set %session.Data("sets",Set,Type)=(action="detail")
+  	} elseif (action="detailsortred")!(action="detailsortpat") {  //user clicked on detailsort(negated->none) or no sort(patient)
+	  Set Set=$ZCVT($Get(%request.Data("set",1)),"I","URL")
+	  If action="detailsortred" {
+	  	  Set %session.Data("sets",Set,"SORT")=1
+	  	  Do ##class(iKnow.SetAnalysis).SortPatients(projectId, Set, .SortPat)
+		  Kill %session.Data("sortpatients", Set)
+		  Merge %session.Data("sortpatients", Set)=SortPat
+	  } else {
+	  	  Set %session.Data("sets",Set,"SORT")=0
+		  Kill %session.Data("sortpatients", Set)
+	  }
   	} elseif (action="execute")!(action="batch") {  //user clicked on [execute] or [batch]
 	  Set %session.Data("Tab")="plugin"
  	  If action="execute" set hideList=0,hidePat=0
@@ -793,13 +818,14 @@ function selectLookupElement(value)
 	  Set Concept=%request.Data("concepttext",1)_%request.Data("conceptarea",1)
 	  Set InputSet=$ZCVT(%request.Data("inputset",1),"I","URL")
 	  Set InputPattern=$Get(%request.Data("inputpattern",1))
+	  Set PageSize=$Get(%request.Data("pagesize",1))
  	  Set %session.Data("concepttext")=%request.Data("concepttext",1)
  	  Set %session.Data("conceptarea")=%request.Data("conceptarea",1)
  	  Set PluginId=%request.Data("actionList",1)
  	  Set %session.Data("definition")=$ListBuild(0,PluginId,Concept,InputSet,,,InputPattern)
 	  Merge SessionFilter=%session.Data("filters")
 	  Set resultPtr=""
-	  Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId,projectId,Concept,InputPattern,InputSet,.SessionFilter,,.resultPtr,(action="batch"))
+	  Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId,projectId,Concept,InputPattern,InputSet,.SessionFilter,,.resultPtr,(action="batch"),,PageSize)
 	  //end of block
   	  Do ..Debug("resultPtr",resultPtr)
   	  Set %session.Data("resultPtr")=resultPtr
@@ -837,11 +863,13 @@ function selectLookupElement(value)
 		Set %session.Data("concepttext")=""
 		Set %session.Data("conceptarea")=""
 		set Set=%request.Data("set",1)
-		Do ##class(iKnow.SetAnalysis).GetResultSet(projectId,.resultPtr,.selectedResult,Set,.filters,.definition,.blacklistmembers,.deepseeEnabled,.restEnabled,.setdescription)
+		Do ##class(iKnow.SetAnalysis).GetResultSet(projectId,.resultPtr,.selectedResult,Set,.filters,.definition,.blacklistmembers,.deepseeEnabled,.restEnabled,.setdescription,.EntityFilters)
   	  	Set %session.Data("resultPtr")=resultPtr
   	  	Merge resultEnt=^iKnow.SetAnalysisTemp(resultPtr,"S")
 		Kill %session.Data("filters")
 		Merge %session.Data("filters")=filters
+		Kill %session.Data("entityfilters")
+		Merge %session.Data("entityfilters")=EntityFilters
 		Set %session.Data("definition")=definition
 		If definition'="" {
 			Set (%session.Data("concepttext"),%session.Data("conceptarea"))=$List(definition,3)
@@ -912,13 +940,14 @@ function selectLookupElement(value)
 	  			Set Concept=%request.Data("concepttext",1)_%request.Data("conceptarea",1)
 	  			Set InputSet=$ZCVT(%request.Data("inputset",1),"I","URL")
 	  			Set InputPattern=$Get(%request.Data("inputpattern",1))
+	  			Set PageSize=$Get(%request.Data("pagesize",1))
  	 			Set %session.Data("concepttext")=%request.Data("concepttext",1)
  	  			Set %session.Data("conceptarea")=%request.Data("conceptarea",1)
 				Set definition=$ListBuild(0,PluginId,Concept,InputSet,,,InputPattern)
  	  			Set %session.Data("definition")=definition
 	  			Merge filters=%session.Data("filters")
 	  			Set resultPtr=""
-	  			Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId,projectId,Concept,InputPattern,InputSet,.filters,,.resultPtr,0)
+	  			Set sc = ##class(iKnow.SetAnalysisPlugin).Execute(PluginId,projectId,Concept,InputPattern,InputSet,.filters,,.resultPtr,0,,PageSize)
   	  			Set %session.Data("resultPtr")=resultPtr
   	  			;If resultPtr'="" Merge resultEnt=^iKnow.SetAnalysisTemp(resultPtr,"S")
   	  			;--> entities
@@ -932,20 +961,19 @@ function selectLookupElement(value)
 	  			Set %session.Data("iAction")=%request.Data("actionList",1)
 	  			Set %session.Data("inputset")=InputSet
  	  			Set %session.Data("inputpattern")=InputPattern
+	  			Set %session.Data("pagesize")=PageSize
 			} Else {
 	  			Set definition=%session.Data("definition")
 	  			Merge filters=%session.Data("filters")
 	  			Set resultPtr = %session.Data("resultPtr")
 
 	  			Merge entities=%request.Data("entities")
-	  			kill ^dwdebugent m ^dwdebugent=entities
 			}
   			Merge blacklistmembers=%request.Data("blacklistmembers")
     		Merge resultEnt = ^iKnow.SetAnalysisTemp(resultPtr,"S")
 			set deepseeEnabled=$Get(%request.Data("sDeepseeEnabled",1))
 			set restEnabled=$Get(%request.Data("sRestEnabled",1))
 			set setdescription=$Get(%request.Data("setdescription",1))
-			kill ^dwdebug merge ^dwdebug(1)=%request.Data
     		If '##class(iKnow.SetAnalysis).SaveSet(projectId,metadataField,Set,definition,.entities,(action="mergeset"),.filters,resultPtr,.blacklistmembers,.deepseeEnabled,.restEnabled,setdescription) {
     			Set errorSave="Cannot merge in existing Set if filters are not the same !"
     			Set iEnt="" For  {
@@ -1109,6 +1137,7 @@ function selectLookupElement(value)
 	             </select>
                </td>
              </tr>
+             <!--- do not show Set Repositories for the moment
              <tr valign="top">
                <td><span class="label">Set Repositories : </span></td>
                <td>
@@ -1125,6 +1154,7 @@ function selectLookupElement(value)
 	             </select>
                </td>
              </tr>
+			--->
              <tr>
                <td><span class="label">Public (visible for all) : </span></td>
                <td><input id="chkPublic" type="checkbox" name="chkPublic" value=1 #($s($Get(pIsPublic)=1:"checked",1:""))#/>&nbsp;
@@ -1136,7 +1166,7 @@ function selectLookupElement(value)
                    <button type="submit" name="action" value="saveproject" title="Save this project">saveproject</button> &nbsp;
                    <button type="submit" name="action" value="deleteproject" title="Delete this project" onclick="return confirm('Do you Realy want to Delete this Project ???');">deleteproject</button> &nbsp;
                  </csp:if>
-                 <button type="button" name="action" onclick="window.location.href = 'iKnowSetAnalysis.csp?CacheLogout=end'" title="Close this project and select another one">switchproject</button>
+                 <button type="button" name="action" onclick="window.location.href = 'iKnowSetAnalysis.csp?action=switchproject'" title="Close this project and select another one">switchproject</button>
                </td> 
              </tr>
            </table>
@@ -1230,6 +1260,16 @@ function selectLookupElement(value)
 			            </div>
 			          </td>
 			        </tr>
+					<tr>
+			          <td><span class="label"><div id="showpagesizelabel">Pagesize</div></span></td>
+
+					  <td>
+  			            <span id="showpagesize">
+		              	  <input type="text" name="pagesize" id="pagesize" class="box40" value="#($Get(%session.Data("pagesize")))#"/>
+			            </span>
+
+					  </td>
+					</tr>
 				    <tr>
 				      <td></td><td>
 				       <div id="showexecutebatch">
@@ -1297,6 +1337,16 @@ function selectLookupElement(value)
 		          </td>
 		        </tr>
 			</csp:if>  <!--- end of entities section --->
+			<csp:if condition="$Get(EntityFilters)>0">  <!--- show list of entity filters  -->
+			  <script language="cache" runat="server">
+			  set iEntityFilter="" For {
+				  Set iEntityFilter=$Order(EntityFilters(iEntityFilter),1,EFData) If iEntityFilter="" Quit
+			      Write "<tr><td>"
+			      Write "<input type=""text"" name=""entityfilter"" value="""_$List(EFData,1)_":"_$List(EFData,2)_""" class=""box40""/>"
+			      Write "</td></tr>",!
+			  }
+			  </script>
+			</csp:if>
             <csp:if condition="$Get(blacklistmembers)>0">  <!---- members (blacklisted) section  --->
 		        <tr>
 		          <td>   
@@ -1373,7 +1423,7 @@ function selectLookupElement(value)
 	       <tr>
 	         <td colspan=5>
 	           <table id="tblFormula">
-	             <tr><td colspan="2"></td><td>#($Get(ErrorCalc))#</td></tr>
+	             <tr><td colspan="1"></td><td class="error">#($Get(ErrorCalc))#</td></tr>
 	             <tr>
 	               <td><span class="label">Set&nbsp;name</span></td>
 	               <td><input type="text" size="15" name="logicset" value="#($Get(logicset))#" class="box40" placeholder="Name of the set"/></td>
@@ -1383,7 +1433,7 @@ function selectLookupElement(value)
 	               <td colspan="2">
 	                 <select name="FormulaOperator" id="comboFormulaOperator" class="box40">
 			            <script language="cache" runat="server">
-	                     For Operator="and","or","andnot","andnotsentence","score","extract" {
+	                     For Operator="and","or","andnot","andnotsentence","andsentence","andsentenceorder","score","extract" {
 		                     Write "<option"
 		                     If $ZCVT(Operator,"U")=$Get(formulaOperator) write " selected"
 		                     Write ">",Operator,"</option>"
@@ -1409,7 +1459,7 @@ function selectLookupElement(value)
 	             </tr>
 	             <tr>
 	               <td><span class="label">Formula</span></td>
-	               <td colspan="2"><input id="txtFormula" type="text" class="box40" name="formula" value="#($Get(formula))#" placeholder="MySet1 and MySet2"/></td>
+	               <td colspan="2"><input id="txtFormula" type="text" class="box40" name="formula" value='#($Get(formula))#' placeholder="MySet1 and MySet2"/></td>
 	             </tr>
 	             <tr class="help"><td></td><td><i>set1 and set2</i></td></tr>
 	             <tr class="help"><td></td><td><i>set1 or set2 or set3</i></td></tr>
@@ -1719,7 +1769,7 @@ function selectLookupElement(value)
         </select>
       </td>
     </tr>
-<!---
+
     <tr>
       <td>iFind Index : </td>
       <td>
@@ -1730,7 +1780,7 @@ function selectLookupElement(value)
         </select>
       </td>
     </tr>
---->
+
     <tr>
       <td>Security Resource : </td>
       <td>

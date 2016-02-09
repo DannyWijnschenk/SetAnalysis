@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25" zv="Cache for Windows (x86-64) 2015.2.1 (Build 705U)" ts="2016-02-09 10:53:31">
+<Routine name="iKnowSetAnalysisIncludes" type="INC" timestamp="63313,52864.642174"><![CDATA[
+///output and input for urls :
+#define OUT(%s)	$ZCVT($ZCVT(%s,"O","UTF8"),"O","URL")
+#define IN(%s)	$ZCVT($ZCVT(%s,"I","URL"),"I","UTF8")
+]]></Routine>
+</Export>

@@ -69,11 +69,13 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="GetPlugin">
 <ClassMethod>1</ClassMethod>
-<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String=""</FormalSpec>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String,InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String=""</FormalSpec>
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
+	#Dim Page as %Integer
 	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
 	Set sc=$$$OK
+ 	Do ..GetPageSize(.Page,.PageSize, Batch)
 	Set PathFromTo=0,PathFrom="",PathTo=""
 	If Input["~" {
 		Set PathFrom=$P(Input,"~",1)
@@ -84,14 +86,14 @@ Order in which they appear in dropdown lists</Description>
 	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
 	If InputSet'="" {
 		Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
-		Do ..GetPathsBySet(ProjectId, DomainId, objFilter, InputSet, .resultPath)
+		Do ..GetPathsBySet(ProjectId, DomainId, objFilter, InputSet, .resultPath, Page, PageSize)
 	} elseif Input["@" {
 		;todo : input can be 'abc,@xyz,@def' where abc is an entity, and xyz and def are sets
 		;       this should read : give all paths where entity abc is present AND
 		;                          a value from set xyz AND a value from set def
 		;get paths from first entry (set or entity)
 		;loop through the paths, and check that the rest of the entities or one per set are present
-		Do ..GetPaths(ProjectId, DomainId, objFilter, $Piece(Input,",",1), .resultPath)
+		Do ..GetPaths(ProjectId, DomainId, objFilter, $Piece(Input,",",1), .resultPath, Page, PageSize)
 		For iPiece=2:1:$Length(Input,",") {
 			Set InputPiece=$Piece(Input,",",iPiece)
 			If $Extract(InputPiece,1)="@" {
@@ -121,7 +123,7 @@ Order in which they appear in dropdown lists</Description>
 	} else {
 		;replace numeric by #N# ?
 	    Set Input=$ListFromString(Input,",")
-		Do ..GetPathsByInput(DomainId, objFilter, Input, .resultPath)
+		Do ..GetPathsByInput(DomainId, objFilter, Input, .resultPath, Page, PageSize)
 	}
 	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
 	Kill ^||iKnow.SetAnalysisTemp
@@ -161,26 +163,26 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="GetPaths">
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[ProjectId,DomainId,objFilter,Input,&resultPath]]></FormalSpec>
+<FormalSpec><![CDATA[ProjectId,DomainId,objFilter,Input,&resultPath,Page,PageSize]]></FormalSpec>
 <Implementation><![CDATA[
 	If $Extract(Input,1)="@" {
-		Do ..GetPathsBySet(ProjectId, DomainId, objFilter, $Extract(Input,2,*), .resultPath)
+		Do ..GetPathsBySet(ProjectId, DomainId, objFilter, $Extract(Input,2,*), .resultPath, Page, PageSize)
 	} else {
-		Do ..GetPathsByInput(DomainId, objFilter, Input, .resultPath)
+		Do ..GetPathsByInput(DomainId, objFilter, Input, .resultPath, Page, PageSize)
 	}
 ]]></Implementation>
 </Method>
 
 <Method name="GetPathsBySet">
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[ProjectId,DomainId,objFilter,InputSet,&resultPath]]></FormalSpec>
+<FormalSpec><![CDATA[ProjectId,DomainId,objFilter,InputSet,&resultPath,Page,PageSize]]></FormalSpec>
 <Implementation><![CDATA[
 		Kill resultPath
 		Set Input=""
 		For  {
 			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
 			Kill resultInput
-			Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.resultInput, DomainId, $lb(Input), 0, , objFilter)
+			Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.resultInput, DomainId, $lb(Input), Page, PageSize, objFilter)
 			Set iCount=""
 			For  {
 				Set iCount=$Order(resultInput(iCount),1,Data) If iCount="" Quit
@@ -192,9 +194,9 @@ Order in which they appear in dropdown lists</Description>
 
 <Method name="GetPathsByInput">
 <ClassMethod>1</ClassMethod>
-<FormalSpec><![CDATA[DomainId,objFilter,Input,&resultPath]]></FormalSpec>
+<FormalSpec><![CDATA[DomainId,objFilter,Input,&resultPath,Page,PageSize]]></FormalSpec>
 <Implementation><![CDATA[
-		Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.result, DomainId, Input, 0, , objFilter,2)  //1 for ANY or 2 for ALL
+		Set sc = ##class(%iKnow.Queries.PathAPI).GetByEntities(.result, DomainId, Input, Page, PageSize, objFilter,2)  //1 for ANY or 2 for ALL
 		Set iCount=""
 		For  {
 			Set iCount=$Order(result(iCount),1,Data) If iCount="" Quit

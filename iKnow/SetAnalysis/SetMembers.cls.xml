@@ -25,6 +25,10 @@
 <Parameter name="MAXLEN" value="1000"/>
 </Property>
 
+<Property name="Approved">
+<Type>%Boolean</Type>
+</Property>
+
 <Index name="idxSet">
 <Properties>SetId</Properties>
 </Index>
@@ -38,8 +42,6 @@
 <StreamLocation>^iKnow.SetAnalysis.SetMembersS</StreamLocation>
 <ExtentSize>100000</ExtentSize>
 <Data name="SetMembersDefaultData">
-<Structure>listnode</Structure>
-<Subscript/>
 <Value name="1">
 <Value>%%CLASSNAME</Value>
 </Value>
