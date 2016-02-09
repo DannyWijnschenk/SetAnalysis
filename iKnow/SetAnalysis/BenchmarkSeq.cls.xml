@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.BenchmarkSeq">
+<Super>%Persistent</Super>
+<TimeCreated>63760,36200.888427</TimeCreated>
+
+<Property name="Benchmark">
+<Type>iKnow.SetAnalysis.Benchmark</Type>
+</Property>
+
+<Property name="Sequence">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="Description">
+<Type>%String</Type>
+</Property>
+
+<Property name="StartTime">
+<Type>%String</Type>
+</Property>
+
+<Property name="StopTime">
+<Type>%String</Type>
+</Property>
+
+<Property name="TotalTime">
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<SqlComputeCode>Set {TotalTime} = ##class(iKnow.SetAnalysis.BenchmarkSeq).GetTotalTime({StartTime},{StopTime})</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+</Property>
+
+<Method name="GetTotalTime">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Start,Stop</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If Start["," {
+		Set SecondsStart = $Piece(Start, ",", 2)
+		Set SecondsStop  = ((Stop - Start) * (24*60*60)) + $Piece(Stop, ",", 2)
+		Set Seconds = SecondsStop - SecondsStart
+	} else {
+		Set Seconds = $J(Stop - Start,0,2)
+	}
+	Return Seconds
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnal4ECA.BenchmarkSeqD</DataLocation>
+<DefaultData>BenchmarkSeqDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnal4ECA.BenchmarkSeqD</IdLocation>
+<IndexLocation>^iKnow.SetAnal4ECA.BenchmarkSeqI</IndexLocation>
+<StreamLocation>^iKnow.SetAnal4ECA.BenchmarkSeqS</StreamLocation>
+<Data name="BenchmarkSeqDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Benchmark</Value>
+</Value>
+<Value name="3">
+<Value>Sequence</Value>
+</Value>
+<Value name="4">
+<Value>Description</Value>
+</Value>
+<Value name="5">
+<Value>StartTime</Value>
+</Value>
+<Value name="6">
+<Value>StopTime</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

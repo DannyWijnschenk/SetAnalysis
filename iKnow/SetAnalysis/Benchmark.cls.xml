@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysis.Benchmark">
+<Description>
+Version 1.0 (Benchmarks on Top, Similar, Related)</Description>
+<Super>%Persistent</Super>
+<TimeCreated>63760,35566.139148</TimeCreated>
+
+<Property name="Name">
+<Type>%String</Type>
+</Property>
+
+<Property name="Description">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+</Property>
+
+<Property name="StartDate">
+<Type>%Date</Type>
+</Property>
+
+<Property name="EndDate">
+<Type>%Date</Type>
+</Property>
+
+<Property name="StartTime">
+<Type>%Time</Type>
+</Property>
+
+<Property name="EndTime">
+<Type>%Time</Type>
+</Property>
+
+<Property name="TotalTime">
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<SqlComputeCode>Set {TotalTime} = ##class(iKnow.SetAnalysis.BenchmarkSeq).GetTotalTime({StartDate}_","_{StartTime},{EndDate}_","_{EndTime})</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+</Property>
+
+<Method name="QueryAll">
+<Description><![CDATA[
+run this method cold & warm, with 1GB memory and 10GB memory
+]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId:%Integer,StartType:%String="Warm",Memory:%Integer</FormalSpec>
+<Implementation><![CDATA[
+	#Dim LogId, Freq1, Freq2, iEntity as %Integer
+	#Dim Entity1, Entity2, result, data, MemoryList as %String
+	;if no domainId, get first one in namespace
+	If '$Data(DomainId) {
+		&sql(Select ID Into :DomainId From %iKnow."Domain" Order By ID ASC)
+		If SQLCODE'=0 Write !,"No iKnow domains" Quit
+	}
+
+	If '$Data(Memory) {
+		Set MemoryList = $SYSTEM.Util.GlobalBuffers()
+		Set Memory = $List(MemoryList,3)*8/1024  //only 8KB buffers
+	}
+		
+	Set LogId = ..NewLog("Benchmark #1", StartType_" start, "_Memory_" MB")
+	Do ..LogStart(LogId, "Top")
+	Do ##class(%iKnow.Queries.EntityAPI).GetTop(.result,DomainId,1,100000)
+	Do ..LogEnd(LogId)
+	Set (Entity1, Entity2)=""
+	Set iEntity=""
+	For  {
+		Set iEntity=$Order(result(iEntity),1,data) If iEntity="" Quit
+		If Entity1="" Set Entity1=$List(data,2),Freq1=$List(data,3) Continue
+		If Entity2="",$List(data,3)'>100 Set Entity2=$List(data,2),Freq2=$List(data,3) Quit
+	}
+	If Entity1 '= "" {
+		Do ..LogStart(LogId, "Similar "_Entity1_" #"_Freq1)
+		Do ..QuerySimilar(DomainId, Entity1)
+		Do ..LogEnd(LogId)
+
+		Do ..LogStart(LogId, "Related "_Entity1_" #"_Freq1)
+		Do ..QueryRelated(DomainId, Entity1)
+		Do ..LogEnd(LogId)
+	}
+	If Entity2 '= "" {
+		Do ..LogStart(LogId, "Similar "_Entity2_" #"_Freq2)
+		Do ..QuerySimilar(DomainId, Entity2)
+		Do ..LogEnd(LogId)
+
+		Do ..LogStart(LogId, "Related "_Entity2_" #"_Freq2)
+		Do ..QueryRelated(DomainId, Entity2)
+		Do ..LogEnd(LogId)
+	}
+	
+	Do ..CloseLog(LogId)
+]]></Implementation>
+</Method>
+
+<Method name="List">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	#Dim SQLStatement as %SQL.Statement
+	#Dim SQLResult as %SQL.StatementResult
+	#Dim BenchmarkId, SQL as %String
+	#Dim sc as %System.Status
+	Set SQLStatement = ##class(%SQL.Statement).%New()
+	Set SQL = "Select Benchmark->ID, Benchmark->Name, Benchmark->Description, Sequence, Description, TotalTime, Benchmark->StartDate, Benchmark->StartTime, Benchmark->TotalTime "
+	Set SQL = SQL _ "From iKnow_SetAnalysis.BenchmarkSeq "
+	
+	Set sc = SQLStatement.%Prepare(SQL)
+	If sc'=1 Do $SYSTEM.Status.DisplayError(sc) Quit
+	
+	Set SQLResult = SQLStatement.%Execute()
+	If SQLResult="" Write !,"Error in execute SQL" Quit
+	
+	Set BenchmarkId="",SubLine=""
+	While SQLResult.%Next() {
+		If BenchmarkId '= SQLResult.%GetData(1) {
+			Write !?0,SQLResult.%GetData(2)," "
+			Write ?15,SQLResult.%GetData(3)," "
+			Set BenchmarkId = SQLResult.%GetData(1)
+			Set SubLine=0
+		} elseif SubLine=1 {
+			Write ?1,"(",$ZD(SQLResult.%GetData(7),4)," - ",$ZT(SQLResult.%GetData(8)),")"
+		} elseif SubLine=2 {
+			Set TotalTime = SQLResult.%GetData(9)
+			Set hh = (TotalTime\60) If $L(hh)=1 Set hh = "0"_hh
+			Set mm = $Piece(TotalTime,".",1)#60 If $L(mm)<2 Set mm = $E("00",1,2-$L(mm)) _ mm
+			Set ss = $Piece(TotalTime,".",2) If $L(ss)<2 Set ss = $E("00",1,2-$L(ss)) _ ss
+			Write ?1,"(Total Time : ",hh_":"_mm_":"_ss,")"
+		}
+		Set SubLine = SubLine + 1
+		Write ?37,$J(SQLResult.%GetData(4),2,0),"."
+		Write $E(SQLResult.%GetData(5),1,28)," "
+		Write ?70,$J(SQLResult.%GetData(6),9,2),!
+	}
+]]></Implementation>
+</Method>
+
+<Method name="QuerySimilar">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId:%Integer,Entity:%String</FormalSpec>
+<Implementation><![CDATA[
+	#Dim result as %String
+	Do ##class(%iKnow.Queries.EntityAPI).GetSimilar(.result, DomainId, Entity, 1, 100000)
+]]></Implementation>
+</Method>
+
+<Method name="QueryRelated">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>DomainId:%Integer,Entity:%String</FormalSpec>
+<Implementation><![CDATA[
+	#Dim result as %String
+	Do ##class(%iKnow.Queries.EntityAPI).GetRelated(.result, DomainId, Entity, 1, 100000)
+]]></Implementation>
+</Method>
+
+<Method name="QuerySentences">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>domainId:%Integer,entity:%String</FormalSpec>
+</Method>
+
+<Method name="NewLog">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>Name,Description:%String</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+	Set Date = +$H
+	Set Time = +$P($H,",",2)
+	&sql(insert into iKnow_SetAnalysis.Benchmark (Name, Description, StartDate, StartTime) Values (:Name, :Description, :Date, :Time))
+	Quit %ROWID
+]]></Implementation>
+</Method>
+
+<Method name="LogStart">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>BenchmarkId:%Integer,Description:%String</FormalSpec>
+<Implementation><![CDATA[
+	#Dim Time = $zH
+	&sql(Select Sequence Into :Sequence From iKnow_SetAnalysis.BenchmarkSeq Where Benchmark = :BenchmarkId Order By Sequence DESC)
+	If SQLCODE=0 {
+		Set Sequence = Sequence + 1
+	} else {
+		Set Sequence = 1
+	}
+	&sql(Insert iKnow_SetAnalysis.BenchmarkSeq
+	            (Benchmark, Sequence, Description, StartTime)
+	            Values (:BenchmarkId, :Sequence, :Description, :Time)
+	    )
+]]></Implementation>
+</Method>
+
+<Method name="LogEnd">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>BenchmarkId:%Integer</FormalSpec>
+<Implementation><![CDATA[
+	#Dim Time = $zH
+	
+	&sql(Select Sequence Into :Sequence From iKnow_SetAnalysis.BenchmarkSeq Where Benchmark = :BenchmarkId Order By Sequence DESC)
+	If SQLCODE'=0 Write !,"no LogStart for LogEnd" Quit
+	
+	&sql(Update iKnow_SetAnalysis.BenchmarkSeq
+	            (StopTime)
+	            Values (:Time)
+	            Where (Benchmark = :BenchmarkId) and (Sequence = :Sequence)
+	            )
+]]></Implementation>
+</Method>
+
+<Method name="CloseLog">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>BenchmarkId:%Integer</FormalSpec>
+<Implementation><![CDATA[
+	Set Date = +$H
+	Set Time = +$P($H,",",2)
+	&sql(Update iKnow_SetAnalysis.Benchmark
+	            (EndDate, EndTime)
+	            Values (:Date, :Time)
+	            Where (ID = :BenchmarkId)
+	    )
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^iKnow.SetAnalysis.BenchmarkD</DataLocation>
+<DefaultData>BenchmarkDefaultData</DefaultData>
+<IdLocation>^iKnow.SetAnalysis.BenchmarkD</IdLocation>
+<IndexLocation>^iKnow.SetAnalysis.BenchmarkI</IndexLocation>
+<StreamLocation>^iKnow.SetAnalysis.BenchmarkS</StreamLocation>
+<Data name="BenchmarkDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Name</Value>
+</Value>
+<Value name="3">
+<Value>Description</Value>
+</Value>
+<Value name="4">
+<Value>StartDate</Value>
+</Value>
+<Value name="5">
+<Value>EndDate</Value>
+</Value>
+<Value name="6">
+<Value>StartTime</Value>
+</Value>
+<Value name="7">
+<Value>EndTime</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

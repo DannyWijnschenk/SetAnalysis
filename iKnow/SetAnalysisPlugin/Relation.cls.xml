@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="iKnow.SetAnalysisPlugin.Relation">
+<Super>iKnow.SetAnalysisPlugin</Super>
+<TimeCreated>63802,41705.633712</TimeCreated>
+
+<Parameter name="PluginId">
+<Description>
+ID's 1-999 are reserved, custom plugins start with 1000</Description>
+<Default>15</Default>
+</Parameter>
+
+<Parameter name="Order">
+<Description>
+Order in which they appear in dropdown lists</Description>
+<Default>15</Default>
+</Parameter>
+
+<Parameter name="Name">
+<Default>Relation</Default>
+</Parameter>
+
+<Parameter name="ShortDescription">
+<Default><![CDATA[Returns all iKnow Relations that are found in a CRC with the Concept.<br>The Concept can be a master (Crc) or a slave (crC) Concept.<br>.Enter a concept OR an existing Set.]]></Default>
+</Parameter>
+
+<Parameter name="LongDescription">
+</Parameter>
+
+<Parameter name="InputLabel">
+<Default>Concept</Default>
+</Parameter>
+
+<Parameter name="InputPlaceholder">
+<Default>concept</Default>
+</Parameter>
+
+<Parameter name="SetLabel">
+<Default>Set</Default>
+</Parameter>
+
+<Parameter name="InputSize">
+<Default>50</Default>
+</Parameter>
+
+<Parameter name="iKnowDomain">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputSet">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="InputPattern">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="Metafield">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TermType">
+<Default>ENTITY</Default>
+</Parameter>
+
+<Parameter name="DisableManualSelection">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="PageSize">
+<Default>500</Default>
+</Parameter>
+
+<Method name="GetPlugin">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>PluginId:%Integer,ProjectId:%String,Input:%String,InputPattern:%String="",InputSet:%String,objFilter:%String,*resultPtr:%String,Blacklists:%String="",Batch:%Boolean=0,PageSize:%String="500"</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#Dim Page as %Integer
+	#Dim relation as %String
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set sc=$$$OK
+	Do ..GetPageSize(.Page, .PageSize, Batch, ..#PageSize)
+	If $Get(resultPtr)="" Set resultPtr=$i(^iKnow.SetAnalysisTemp)
+ 	If InputSet'="" {
+		Kill result
+		Set Input=""
+		Do ..GetPublicProjectSet(InputSet, .ProjectId, .InputSet)  //replace if public set
+		For  {
+			Set Input=$Order(^iKnow.SetAnalysis(ProjectId, InputSet, "E", Input)) If Input="" Quit
+			Kill resultInput
+			Set sc = ..GetByEntities(.resultInput, DomainId, $lb(Input), Page, PageSize, objFilter)
+			Set iCount=""
+			For  {
+				Set iCount=$Order(resultInput(iCount)) If iCount="" Quit
+				Set result($i(result))=resultInput(iCount)
+			}
+		}
+	} else {
+		If Input["|" {
+			Kill tempresult
+			Set result=""
+			If $Piece(Input,"|",1)'="" {
+				Set sc = ..GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",1),","), Page, PageSize, objFilter,$$$USEPOSM)
+				Merge result=tempresult
+				set result=$Order(result(""),-1)
+			}
+			If $Piece(Input,"|",2)'="" {
+				Set sc = ..GetByEntities(.tempresult, DomainId, $ListFromString($Piece(Input,"|",2),","), Page, PageSize, objFilter,$$$USEPOSS)
+				If (result="") {  //all results from 2 are valid
+					Merge result=tempresult
+				} else {  //AND
+					Set iResult="" For {
+						Set iResult=$Order(result(iResult)) if iResult="" Quit
+						Set Found=0 Set jResult=""
+						For {
+							Set jResult=$Order(tempresult(jResult)) If jResult="" Quit
+							  If $List(tempresult(jResult),1)=$List(result(iResult),1) Set Found=1
+						}
+						If 'Found Kill result(iResult)		
+					}
+				}
+			}
+		} else {
+			Set sc = ..GetByEntities(.result, DomainId, $ListFromString(Input,","), Page, PageSize, objFilter)
+		}
+	}
+
+	Set resultEnt=$Get(^iKnow.SetAnalysisTemp(resultPtr),0)
+	Kill ^||iKnow.SetAnalysisTemp
+	Set iCount="" For {
+		Set iCount=$Order(result(iCount),1,data) If iCount="" Quit
+		set relation=$list(data,3)
+		If InputPattern'="" {
+			Set relation=..ReplacePattern($List(data,3),InputPattern)
+		}
+		If relation="" Continue
+		Set frequency=$List(data,5)
+		Set ^||iKnow.SetAnalysisTemp(relation)=$Get(^||iKnow.SetAnalysisTemp(relation))+frequency
+		Set relationId=##class(%iKnow.Queries.EntityAPI).GetId(DomainId, relation)
+		If +relationId'=0 Set ^||iKnow.SetAnalysisTemp(relation,relationId)=$list(data,5)
+	}
+	Set relation=""
+	For {
+		Set relation=$Order(^||iKnow.SetAnalysisTemp(relation)) If relation="" Quit
+		Set frequency=^||iKnow.SetAnalysisTemp(relation)
+		Set sort=" "_$J(99999999-frequency,8)_$ZCVT(relation,"U")
+		Set relationId="",relationIdList=""
+		For {
+			Set relationId=$Order(^||iKnow.SetAnalysisTemp(relation,relationId)) If relationId="" Quit
+			Set relationIdList=relationIdList_$ListBuild(relationId)
+			Set resultEnt=resultEnt+1
+		}
+		Set ^iKnow.SetAnalysisTemp(resultPtr,"S",sort,relationIdList)=$ListBuild(relation_" [ "_frequency_" ]")
+	}
+	Set ^iKnow.SetAnalysisTemp(resultPtr,"S")=resultEnt
+	Quit sc
+]]></Implementation>
+</Method>
+
+<Method name="GetByEntities">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&resultInput,DomainId,Input,Page,PageSize,objFilter,Type]]></FormalSpec>
+<Implementation><![CDATA[
+	If '$Data(Type) Set Type = $$$USEPOSALL
+	If PageSize [ "#" {
+		Set CutOff = +PageSize
+		Set PageSize = 100
+		Set iCount = 0, Stop = 0
+		For Page=1:1 {
+			Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.resultTemp, DomainId, Input, Page, PageSize, objFilter,,Type)
+			If $Order(resultTemp(""))="" Quit
+			Set iResult=""
+			For {
+				Set iResult=$Order(resultTemp(iResult),1,data) If iResult="" Quit
+				If $List(data,5) < CutOff Set Stop = 1 Quit
+				Set iCount=iCount+1
+				Set resultInput(iCount)=data
+			}
+			If Stop Quit
+		}
+	}
+	else {
+		Set sc = ##class(%iKnow.Queries.CrcAPI).GetByEntities(.resultInput, DomainId, Input, Page, PageSize, objFilter,,Type)
+	}
+	Return sc
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginValue">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Id</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Set Value = ##class(%iKnow.Queries.EntityAPI).GetValue(DomainId, Id)
+	Quit Value
+]]></Implementation>
+</Method>
+
+<Method name="GetPluginId">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId,resultPtr,Value</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	Quit ##class(%iKnow.Queries.EntityAPI).GetId(DomainId, Value)
+]]></Implementation>
+</Method>
+
+<Method name="SetPluginMembers">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>ProjectId:%String,resultPtr:%String,SaveSet:%String,TermType:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set DomainId=##class(iKnow.SetAnalysis.Projects).GetDomainId(ProjectId)
+	&sql(Select iKnowMetafield, iKnowMetafieldMethod into :fieldName,:fieldMethod from iKnow_SetAnalysis.Projects Where Id =:ProjectId)
+	If fieldName'="" {
+		Set fieldId=##class(%iKnow.Queries.MetadataAPI).GetFieldId(DomainId, fieldName, .sc)
+	} else {
+		Set fieldId=""
+	}
+	Do ##class(iKnow.SetAnalysis).BuildFilterFromSet(ProjectId, SaveSet,.objFilter)
+	Set Value="" For  {
+		Set Value=$Order(^iKnow.SetAnalysis(ProjectId, SaveSet, "E", Value),1,id) If Value="" Quit
+		If '$ListValid(id) Set entList=$lb(id)
+		Set sc = ##class(%iKnow.Queries.SourceAPI).GetByEntityIds(.result, DomainId, entList, 0,,objFilter)
+		Do ..StoreMetaValues(TermType,ProjectId,SaveSet,fieldId,fieldName,fieldMethod,entList,.result)
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+</Export>
